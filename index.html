@@ -1160,7 +1160,7 @@ function ensureMonthData(key, obj) { if (!obj[key]) obj[key] = {incomes:[], paym
 // Accounts
 // ============================================================
 function addAccount() {
-  accounts.push({name:'新口座', initialBalance:0, transferable:true});
+  accounts.push({name:'新口座', transferable:true});
   const newIdx = accounts.length - 1;
   renderAccountSettings();
   updateAccountSelects();
@@ -1183,8 +1183,6 @@ function renderAccountSettings() {
       <button class="account-del" onclick="deleteAccount(${i})">✕</button>
       <div class="account-balance-label">口座名</div>
       <div style="font-size:15px;font-weight:700;margin:4px 0 10px;color:var(--text);">${acc.name}</div>
-      <div class="account-balance-label">初期残高</div>
-      <div style="font-family:var(--mono);font-size:18px;margin:4px 0 6px;color:var(--text);">${acc.initialBalance.toLocaleString()}円</div>
       <div class="account-balance-label">最低残高</div>
       <div style="font-family:var(--mono);font-size:13px;margin:4px 0 10px;color:var(--warn);">${(acc.minBalance||0).toLocaleString()}円</div>
       <div class="account-tags">
@@ -1202,7 +1200,6 @@ function editAccount(i) {
   const acc = accounts[i];
   const body = `
     <div class="modal-field"><label>口座名</label><input type="text" id="mAccName" value="${acc.name}"></div>
-    <div class="modal-field"><label>初期残高（円）</label><input type="number" id="mAccBalance" value="${acc.initialBalance}"></div>
     <div class="modal-field">
       <label>最低残高（円）<span style="font-size:11px;color:var(--text3);margin-left:6px;">支払い後にこの金額以上残す</span></label>
       <input type="number" id="mAccMinBalance" value="${acc.minBalance || 0}" placeholder="0">
@@ -1216,7 +1213,6 @@ function editAccount(i) {
     </div>`;
   openModal(`「${acc.name}」を編集`, body, () => {
     accounts[i].name           = document.getElementById('mAccName').value.trim() || acc.name;
-    accounts[i].initialBalance = Number(document.getElementById('mAccBalance').value);
     accounts[i].minBalance     = Number(document.getElementById('mAccMinBalance').value) || 0;
     accounts[i].transferable   = document.getElementById('mAccTransfer').value === '1';
     renderAccountSettings();
@@ -1486,7 +1482,7 @@ function deleteActualTx(type, idx) {
 // Balance Calculation
 // ============================================================
 function calcBalances(data) {
-  let balances    = accounts.map(a => a.initialBalance);
+  let balances    = accounts.map(() => 0);
   let incomesSum  = Array(accounts.length).fill(0);
   let paymentsSum = Array(accounts.length).fill(0);
 
@@ -1509,10 +1505,9 @@ function buildBalanceTable(incomesSum, paymentsSum, postBalances) {
   };
 
   let rows = [
-    {label:'初期残高', vals: accounts.map(a => a.initialBalance)},
     {label:'入金合計', vals: incomesSum, cls:'amount-pos'},
     {label:'支払合計', vals: paymentsSum, cls:'amount-neg'},
-    {label:'最終残高', vals: postBalances, highlight:true},
+    {label:'収支', vals: postBalances, highlight:true},
   ];
 
   const total = (arr) => arr.reduce((s,v) => s+v, 0);
@@ -1642,14 +1637,10 @@ function renderTrendCharts() {
   const labels = months;
   const colors = ['#4f8ef7','#3ecf8e','#f7596a','#f0a847','#7c6af5','#f782c2','#45cde4','#a8e86c'];
 
-  // 口座残高推移（月初・月末データ優先、なければ実績計算）
+  // 口座残高推移（口座残高設定ページで入力した月初・月末データを表示）
   const openDatasets = accounts.map((acc, ai) => ({
     label: acc.name + '（月初）',
-    data: months.map(k => {
-      const mb = monthBalances[k]?.[ai];
-      if (mb?.open != null) return mb.open;
-      return null; // データなしはnull
-    }),
+    data: months.map(k => monthBalances[k]?.[ai]?.open ?? null),
     borderColor: colors[ai % colors.length],
     backgroundColor: 'transparent',
     borderDash: [4, 4],
@@ -1658,13 +1649,7 @@ function renderTrendCharts() {
   }));
   const closeDatasets = accounts.map((acc, ai) => ({
     label: acc.name + '（月末）',
-    data: months.map(k => {
-      const mb = monthBalances[k]?.[ai];
-      if (mb?.close != null) return mb.close;
-      // フォールバック: 実績計算
-      const {postBalances} = calcBalances(actualData[k]);
-      return postBalances[ai] ?? null;
-    }),
+    data: months.map(k => monthBalances[k]?.[ai]?.close ?? null),
     borderColor: colors[ai % colors.length],
     backgroundColor: colors[ai % colors.length] + '22',
     tension: 0.3, fill: false, pointRadius: 4,
