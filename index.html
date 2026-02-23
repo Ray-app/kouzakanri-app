@@ -89,22 +89,75 @@ body {
   min-width: 96px;
   text-align: center;
   letter-spacing: 0.04em;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 4px 6px;
+  transition: background 0.15s;
 }
+.month-display:hover { background: rgba(79,142,247,0.1); }
 .month-nav-today {
-  background: rgba(79,142,247,0.15);
-  border: none;
-  color: var(--accent);
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text3);
   padding: 0 10px;
-  height: 36px;
-  border-radius: 8px;
+  height: 28px;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   font-family: var(--sans);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   transition: all 0.15s;
+  margin-left: 2px;
 }
-.month-nav-today:hover { background: rgba(79,142,247,0.28); }
+.month-nav-today:hover { border-color: var(--accent); color: var(--accent); background: rgba(79,142,247,0.08); }
+
+/* 月選択カレンダーポップアップ */
+.month-picker-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  display: none;
+}
+.month-picker-overlay.open { display: block; }
+.month-picker {
+  position: fixed;
+  top: 62px; right: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+  padding: 16px;
+  width: 280px;
+  z-index: 301;
+  animation: popIn 0.15s ease;
+}
+@keyframes popIn {
+  from { opacity:0; transform: translateY(-8px) scale(0.97); }
+  to   { opacity:1; transform: translateY(0)   scale(1); }
+}
+.mp-year-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.mp-year-nav button {
+  background: none; border: none; color: var(--text2);
+  cursor: pointer; font-size: 18px; padding: 4px 10px;
+  border-radius: 6px; transition: all 0.15s;
+}
+.mp-year-nav button:hover { background: var(--border); color: var(--text); }
+.mp-year { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--text); }
+.mp-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+}
+.mp-month-btn {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text2); border-radius: 8px; padding: 8px 4px;
+  cursor: pointer; font-size: 13px; font-family: var(--sans);
+  transition: all 0.15s; text-align: center;
+}
+.mp-month-btn:hover { border-color: var(--accent); color: var(--text); background: rgba(79,142,247,0.08); }
+.mp-month-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+.mp-month-btn.today-mark { border-color: var(--success); color: var(--success); }
+.mp-month-btn.active.today-mark { background: var(--accent); color: #fff; }
 
 .main {
   display: grid;
@@ -548,9 +601,21 @@ select option { background: var(--surface2); }
   <h1>💳 <span>口座</span>管理</h1>
   <div class="month-nav">
     <button onclick="changeMonth(-1)">‹</button>
-    <span class="month-display" id="monthDisplay">-</span>
+    <span class="month-display" id="monthDisplay" onclick="toggleMonthPicker()">-</span>
     <button onclick="changeMonth(1)">›</button>
-    <button class="month-nav-today" onclick="goToToday()">TODAY</button>
+    <button class="month-nav-today" onclick="goToToday()">今月</button>
+  </div>
+
+  <!-- 月選択ポップアップ -->
+  <div class="month-picker-overlay" id="monthPickerOverlay" onclick="closeMonthPicker()">
+    <div class="month-picker" onclick="event.stopPropagation()">
+      <div class="mp-year-nav">
+        <button onclick="mpChangeYear(-1)">‹</button>
+        <span class="mp-year" id="mpYear">-</span>
+        <button onclick="mpChangeYear(1)">›</button>
+      </div>
+      <div class="mp-grid" id="mpGrid"></div>
+    </div>
   </div>
 </header>
 
@@ -861,6 +926,10 @@ select option { background: var(--surface2); }
             <button class="btn btn-danger" onclick="addExpense()">記録</button>
           </div>
         </div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px;">
+          <button class="btn btn-ghost btn-sm" id="zeroDayBtn" onclick="toggleTodayZero()">💤 今日はゼロ円</button>
+          <span id="zeroDayStatus" style="font-size:12px;color:var(--text3);"></span>
+        </div>
       </div>
 
       <!-- カテゴリ別ゲージ -->
@@ -911,6 +980,7 @@ function init() {
   loadAccounts();
   loadData();
   loadBudgetData();
+  syncAllKakeiboToActual(); // 家計簿支出を実績に同期
   setTodayDefaults();
   renderAccountSettings();
   updateAccountSelects();
@@ -926,6 +996,12 @@ function setTodayDefaults() {
     const el = document.getElementById(id);
     if (el && !el.value) el.value = today;
   });
+  // expDate変更時にゼロ円ボタン状態を更新
+  const expDateEl = document.getElementById('expDate');
+  if (expDateEl) {
+    expDateEl.addEventListener('change', updateZeroDayBtn);
+  }
+  updateZeroDayBtn();
 }
 
 // ============================================================
@@ -985,6 +1061,56 @@ function goToToday() {
   renderForecastList();
   renderActualList();
   if (document.getElementById('page-kakeibo').classList.contains('active')) renderKakeibo();
+}
+
+// ---- 月選択ポップアップ ----
+let mpYear = new Date().getFullYear();
+
+function toggleMonthPicker() {
+  const overlay = document.getElementById('monthPickerOverlay');
+  if (overlay.classList.contains('open')) {
+    closeMonthPicker();
+  } else {
+    mpYear = currentYear;
+    renderMonthPicker();
+    overlay.classList.add('open');
+  }
+}
+
+function closeMonthPicker() {
+  document.getElementById('monthPickerOverlay').classList.remove('open');
+}
+
+function mpChangeYear(delta) {
+  mpYear += delta;
+  renderMonthPicker();
+}
+
+function renderMonthPicker() {
+  document.getElementById('mpYear').textContent = mpYear + '年';
+  const now = new Date();
+  const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  const grid = document.getElementById('mpGrid');
+  grid.innerHTML = MONTHS.map((m, i) => {
+    const mn = i + 1;
+    const isActive  = mpYear === currentYear && mn === currentMonth;
+    const isToday   = mpYear === now.getFullYear() && mn === now.getMonth() + 1;
+    let cls = 'mp-month-btn';
+    if (isActive) cls += ' active';
+    else if (isToday) cls += ' today-mark';
+    return `<button class="${cls}" onclick="selectMonth(${mpYear},${mn})">${m}</button>`;
+  }).join('');
+}
+
+function selectMonth(year, month) {
+  currentYear  = year;
+  currentMonth = month;
+  updateMonthDisplay();
+  renderDashboard();
+  renderForecastList();
+  renderActualList();
+  if (document.getElementById('page-kakeibo').classList.contains('active')) renderKakeibo();
+  closeMonthPicker();
 }
 
 function updateMonthDisplay() {
@@ -1375,9 +1501,12 @@ function renderTrendCharts() {
   // 実績ベース収支棒グラフ
   const incData = months.map(k => (actualData[k]?.incomes  || []).reduce((s,t) => s+t.amount, 0));
   const expData = months.map(k => (actualData[k]?.payments || []).reduce((s,t) => s+t.amount, 0));
+  // 家計簿支出合計を加算
+  const kakeiboTotalData = months.map(k => (expenseData[k] || []).reduce((s,e) => s+e.amount, 0));
   buildBarChart('incomeExpenseChart', labels, [
-    {label:'入金（実績）', data: incData, backgroundColor: '#3ecf8e99', borderColor:'#3ecf8e', borderWidth:1},
-    {label:'支払（実績）', data: expData, backgroundColor: '#f7596a99', borderColor:'#f7596a', borderWidth:1},
+    {label:'入金（実績）',   data: incData,         backgroundColor: '#3ecf8e99', borderColor:'#3ecf8e', borderWidth:1},
+    {label:'支払（実績）',   data: expData,         backgroundColor: '#f7596a99', borderColor:'#f7596a', borderWidth:1},
+    {label:'家計簿支出',     data: kakeiboTotalData, backgroundColor: '#f0a84799', borderColor:'#f0a847', borderWidth:1},
   ]);
 
   // 家計簿 カテゴリ別積み上げ棒グラフ
@@ -1560,6 +1689,7 @@ const DEFAULT_CATEGORIES = [
 
 let budgetCategories = []; // [{name, budget}]
 let expenseData = {};       // key: "YYYY-MM", value: [{date,name,amount,category}]
+let zeroDays = {};          // key: "YYYY-MM", value: ["YYYY-MM-DD", ...]  支出ゼロ確定日
 
 // ---- persistence ----
 function saveBudgetData() {
@@ -1567,6 +1697,7 @@ function saveBudgetData() {
   localStorage.setItem('expenseData', JSON.stringify(expenseData));
   localStorage.setItem('monthTotalBudget', JSON.stringify(monthTotalBudget));
   localStorage.setItem('budgetMode', budgetMode);
+  localStorage.setItem('zeroDays', JSON.stringify(zeroDays));
 }
 function loadBudgetData() {
   const c = localStorage.getItem('budgetCats');
@@ -1577,6 +1708,8 @@ function loadBudgetData() {
   monthTotalBudget = m ? JSON.parse(m) : {};
   const bm = localStorage.getItem('budgetMode');
   budgetMode = bm || 'category';
+  const z = localStorage.getItem('zeroDays');
+  zeroDays = z ? JSON.parse(z) : {};
 }
 
 function saveBudgets() {
@@ -1685,6 +1818,7 @@ function addExpense() {
   document.getElementById('expName').value   = '';
   document.getElementById('expAmount').value = '';
   saveBudgetData();
+  syncKakeiboToActual(key); // 家計簿支出を実績に自動同期
   renderKakeibo();
 }
 
@@ -1692,7 +1826,45 @@ function deleteExpense(idx) {
   const key = getMonthKey();
   expenseData[key].splice(idx, 1);
   saveBudgetData();
+  syncKakeiboToActual(key);
   renderKakeibo();
+}
+
+// ---- ゼロ円確定日の操作 ----
+function toggleZeroDay(dateStr) {
+  const monthKey = dateStr.slice(0, 7);
+  if (!zeroDays[monthKey]) zeroDays[monthKey] = [];
+  const idx = zeroDays[monthKey].indexOf(dateStr);
+  if (idx >= 0) {
+    zeroDays[monthKey].splice(idx, 1);
+  } else {
+    zeroDays[monthKey].push(dateStr);
+  }
+  saveBudgetData();
+  renderKakeibo();
+}
+
+function toggleTodayZero() {
+  const dateStr = document.getElementById('expDate')?.value || new Date().toISOString().split('T')[0];
+  toggleZeroDay(dateStr);
+}
+
+function isZeroDay(dateStr) {
+  const monthKey = dateStr.slice(0, 7);
+  return (zeroDays[monthKey] || []).includes(dateStr);
+}
+
+function updateZeroDayBtn() {
+  const dateStr = document.getElementById('expDate')?.value || new Date().toISOString().split('T')[0];
+  const btn = document.getElementById('zeroDayBtn');
+  const status = document.getElementById('zeroDayStatus');
+  if (!btn) return;
+  const active = isZeroDay(dateStr);
+  btn.textContent = active ? '✓ ゼロ円確定済み' : '💤 今日はゼロ円';
+  btn.style.background    = active ? 'rgba(62,207,142,0.15)' : '';
+  btn.style.borderColor   = active ? 'var(--success)' : '';
+  btn.style.color         = active ? 'var(--success)' : '';
+  if (status) status.textContent = active ? `${dateStr} を支出ゼロ円として記録しています` : '';
 }
 
 // ---- render budget settings ----
@@ -1865,6 +2037,9 @@ function renderKakeibo() {
 
   // 日別支出表
   renderDailyTable(expenses, daysInMonth, dailyBudget, today);
+
+  // ゼロ円ボタン状態更新
+  updateZeroDayBtn();
 }
 
 // ============================================================
@@ -1915,6 +2090,8 @@ function renderDailyTable(expenses, daysInMonth, dailyBudget, today) {
     const items     = dayMap[d];
     const dayTotal  = items.reduce((s, e) => s + e.amount, 0);
     const diff      = targetRound - dayTotal;
+    const dateStr   = `${currentYear}-${String(currentMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isZero    = isZeroDay(dateStr);
 
     let dateClass = 'td-date';
     if (isToday)   dateClass += ' today';
@@ -1923,7 +2100,21 @@ function renderDailyTable(expenses, daysInMonth, dailyBudget, today) {
     // 支出セル群（件数分 + 空セルで maxItems に揃える）
     const expCells = Array.from({length: maxItems}, (_, i) => {
       const e = items[i];
-      if (!e) return `<td class="td-expense td-expense-empty"></td>`;
+      if (!e) {
+        // 最初の空セルにゼロ円確定ボタンを表示（支出がない場合のみ）
+        if (i === 0 && dayTotal === 0) {
+          return `<td class="td-expense td-expense-empty" style="vertical-align:middle;text-align:center;">
+            <button onclick="toggleZeroDay('${dateStr}')" style="
+              background:${isZero ? 'rgba(62,207,142,0.15)' : 'rgba(255,255,255,0.04)'};
+              border:1px solid ${isZero ? 'var(--success)' : 'var(--border)'};
+              color:${isZero ? 'var(--success)' : 'var(--text3)'};
+              border-radius:6px; padding:3px 8px; font-size:11px; cursor:pointer;
+              font-family:var(--sans); transition:all 0.15s;
+            ">${isZero ? '✓ ¥0確定' : '¥0 確定'}</button>
+          </td>`;
+        }
+        return `<td class="td-expense td-expense-empty"></td>`;
+      }
       const catName  = budgetCategories[e.category]?.name || '?';
       const catColor = CAT_COLORS[e.category % CAT_COLORS.length];
       return `<td class="td-expense">
@@ -1935,12 +2126,14 @@ function renderDailyTable(expenses, daysInMonth, dailyBudget, today) {
       </td>`;
     }).join('');
 
-    // 小計・差額
+    // 小計・差額（ゼロ円確定日は緑でゼロ表示）
     const totalHTML = dayTotal > 0
-      ? `<span class="summary-total">${dayTotal.toLocaleString()}</span>` : '';
-    const diffColor = dayTotal === 0 ? 'var(--text3)' : diff >= 0 ? 'var(--success)' : 'var(--danger)';
+      ? `<span class="summary-total">${dayTotal.toLocaleString()}</span>`
+      : isZero ? `<span style="font-family:var(--mono);font-size:12px;color:var(--success);">0</span>` : '';
+    const diffColor = isZero ? 'var(--success)' : dayTotal === 0 ? 'var(--text3)' : diff >= 0 ? 'var(--success)' : 'var(--danger)';
     const diffHTML  = dayTotal > 0
-      ? `<span style="font-family:var(--mono);font-size:12px;color:${diffColor};">${diff>=0?'▼':'▲'}${Math.abs(diff).toLocaleString()}</span>` : '';
+      ? `<span style="font-family:var(--mono);font-size:12px;color:${diffColor};">${diff>=0?'▼':'▲'}${Math.abs(diff).toLocaleString()}</span>`
+      : isZero ? `<span style="font-family:var(--mono);font-size:12px;color:var(--success);">▼${targetRound.toLocaleString()}</span>` : '';
 
     html += `<tr class="${isToday ? 'row-today' : ''}">
       <td class="${dateClass}">${d}<br><span style="font-size:10px;">${DOW[dow]}</span></td>
@@ -2049,12 +2242,35 @@ function editExpense(idx) {
       amount:   Number(document.getElementById('mAmount').value),
       category: Number(document.getElementById('mCat').value),
     };
-    saveBudgetData(); renderKakeibo();
+    saveBudgetData(); syncKakeiboToActual(key); renderKakeibo();
   });
 }
 
 // ============================================================
-// Export / Import
+// 家計簿支出 → 実績支払いへ自動同期
+// ============================================================
+function syncKakeiboToActual(key) {
+  ensureMonthData(key, actualData);
+  // 既存の「家計簿自動」エントリを一旦削除
+  actualData[key].payments = actualData[key].payments.filter(p => !p._kakeibo);
+  // 家計簿支出を1件ずつ追加
+  const exps = expenseData[key] || [];
+  exps.forEach(e => {
+    actualData[key].payments.push({
+      date:     e.date,
+      name:     `[家計簿] ${budgetCategories[e.category]?.name || '?'}: ${e.name}`,
+      amount:   e.amount,
+      account:  0, // デフォルト口座（将来的に設定可能にする余地あり）
+      _kakeibo: true, // 自動同期フラグ
+    });
+  });
+  saveData();
+}
+
+// 起動時に全月を同期
+function syncAllKakeiboToActual() {
+  Object.keys(expenseData).forEach(key => syncKakeiboToActual(key));
+}
 // ============================================================
 function exportData() {
   const payload = {
@@ -2067,6 +2283,7 @@ function exportData() {
     expenseData,
     monthTotalBudget,
     budgetMode,
+    zeroDays,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
   const url  = URL.createObjectURL(blob);
@@ -2098,6 +2315,7 @@ function importData(input) {
       expenseData       = data.expenseData        || {};
       monthTotalBudget  = data.monthTotalBudget   || {};
       budgetMode        = data.budgetMode         || 'category';
+      zeroDays          = data.zeroDays           || {};
 
       // 保存
       saveData();
