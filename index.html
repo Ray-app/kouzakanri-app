@@ -632,7 +632,6 @@ select option { background: var(--surface2); }
     <button class="nav-btn" onclick="showPage('kakeibo', this)"><span class="nav-icon">📒</span>家計簿・予算管理</button>
     <div class="sidebar-section">分析</div>
     <button class="nav-btn" onclick="showPage('trend', this)"><span class="nav-icon">📈</span>月次推移グラフ</button>
-    <button class="nav-btn" onclick="showPage('multimonth', this)"><span class="nav-icon">🗓</span>複数月管理</button>
     <div class="sidebar-section">設定</div>
     <button class="nav-btn" onclick="showPage('settings', this)"><span class="nav-icon">⚙️</span>口座設定</button>
     <button class="nav-btn" onclick="showPage('transfer', this)"><span class="nav-icon">🔄</span>データ転送</button>
@@ -773,14 +772,6 @@ select option { background: var(--surface2); }
     </div>
 
     <!-- Multi Month -->
-    <div class="page" id="page-multimonth">
-      <div class="card">
-        <div class="card-title">複数月データ管理</div>
-        <div class="month-pills" id="monthPills"></div>
-        <div id="multiMonthContent"></div>
-      </div>
-    </div>
-
     <!-- Settings -->
     <div class="page" id="page-settings">
       <div class="card">
@@ -1015,7 +1006,6 @@ function init() {
   loadAccounts();
   loadData();
   loadBudgetData();
-  syncAllKakeiboToActual(); // 家計簿支出を実績に同期
   setTodayDefaults();
   renderAccountSettings();
   updateAccountSelects();
@@ -1071,7 +1061,6 @@ function showPage(id, btn) {
   document.getElementById('page-' + id).classList.add('active');
   btn.classList.add('active');
   if (id === 'trend')      renderTrendCharts();
-  if (id === 'multimonth') renderMultiMonth();
   if (id === 'dashboard')  renderDashboard();
   if (id === 'kakeibo')    renderKakeibo();
   if (id === 'settings')   renderAccountSettings();
@@ -1683,11 +1672,9 @@ function renderTrendCharts() {
   }));
   buildLineChart('actualTrendChart', labels, [...closeDatasets, ...openDatasets]);
 
-  // 収支サマリー（家計簿支出は除外）
-  const incData = months.map(k => (actualData[k]?.incomes || [])
-    .filter(t => !t._kakeibo).reduce((s,t) => s+t.amount, 0));
-  const expData = months.map(k => (actualData[k]?.payments || [])
-    .filter(t => !t._kakeibo).reduce((s,t) => s+t.amount, 0));
+  // 収支サマリー
+  const incData = months.map(k => (actualData[k]?.incomes  || []).reduce((s,t) => s+t.amount, 0));
+  const expData = months.map(k => (actualData[k]?.payments || []).reduce((s,t) => s+t.amount, 0));
   buildBarChart('incomeExpenseChart', labels, [
     {label:'入金（実績）', data: incData, backgroundColor: '#3ecf8e99', borderColor:'#3ecf8e', borderWidth:1},
     {label:'支払（実績）', data: expData, backgroundColor: '#f7596a99', borderColor:'#f7596a', borderWidth:1},
@@ -1766,93 +1753,6 @@ function buildBarChart(canvasId, labels, datasets) {
 function getAllMonthKeys() {
   const keys = new Set([...Object.keys(monthData), ...Object.keys(actualData)]);
   return [...keys];
-}
-
-// ============================================================
-// Multi Month
-// ============================================================
-let selectedMultiMonth = null;
-
-function renderMultiMonth() {
-  const months = getAllMonthKeys().sort();
-  const pillsDiv = document.getElementById('monthPills');
-  const contentDiv = document.getElementById('multiMonthContent');
-  if (!pillsDiv) return;
-
-  if (months.length === 0) {
-    pillsDiv.innerHTML = '';
-    contentDiv.innerHTML = '<div class="empty-state">データのある月がありません</div>';
-    return;
-  }
-
-  if (!selectedMultiMonth || !months.includes(selectedMultiMonth)) {
-    selectedMultiMonth = months[months.length - 1];
-  }
-
-  pillsDiv.innerHTML = months.map(k =>
-    `<span class="month-pill ${k===selectedMultiMonth?'active':''}" onclick="selectMultiMonth('${k}')">${k}</span>`
-  ).join('');
-
-  renderMultiMonthContent();
-}
-
-function selectMultiMonth(key) {
-  selectedMultiMonth = key;
-  renderMultiMonth();
-}
-
-function renderMultiMonthContent() {
-  const div = document.getElementById('multiMonthContent');
-  if (!div || !selectedMultiMonth) return;
-  const k = selectedMultiMonth;
-
-  const fData = monthData[k];
-  const aData = actualData[k];
-  const {postBalances: fBal, incomesSum: fInc, paymentsSum: fPay} = calcBalances(fData);
-  const {postBalances: aBal, incomesSum: aInc, paymentsSum: aPay} = calcBalances(aData);
-
-  const allTx = (data, label) => {
-    if (!data) return '';
-    const all = [
-      ...(data.incomes||[]).map(t => ({...t,type:'income'})),
-      ...(data.payments||[]).map(t => ({...t,type:'payment'})),
-    ].sort((a,b) => a.date.localeCompare(b.date));
-    if (all.length === 0) return '';
-    return `<div class="card-title" style="margin-top:16px;margin-bottom:8px;">${label}</div>
-      <div class="tx-list" style="max-height:200px;">
-        ${all.map(t => `
-          <div class="tx-item">
-            <span class="tx-date">${t.date}</span>
-            <span class="tx-name">${t.name}</span>
-            <span class="tx-account">${accounts[t.account]?.name||'?'}</span>
-            <span class="tx-amount ${t.type}">${t.type==='income'?'+':'-'}${t.amount.toLocaleString()}円</span>
-          </div>`).join('')}
-      </div>`;
-  };
-
-  div.innerHTML = `
-    <div class="divider"></div>
-    <b style="font-size:16px;color:var(--accent);">${k} の詳細</b>
-    <div style="margin-top:16px;">
-      <div class="card-title">予測残高</div>
-      ${buildBalanceTable(fInc, fPay, fBal)}
-    </div>
-    ${allTx(fData, '予測トランザクション')}
-    ${aData ? `<div style="margin-top:20px;"><div class="card-title">実績残高</div>${buildBalanceTable(aInc, aPay, aBal)}</div>` : ''}
-    ${aData ? allTx(aData, '実績トランザクション') : ''}
-    <div style="margin-top:16px;">
-      <button class="btn btn-danger btn-sm" onclick="deleteMonthData('${k}')">🗑 この月のデータを削除</button>
-    </div>
-  `;
-}
-
-function deleteMonthData(key) {
-  if (!confirm(`${key} のデータを削除しますか？`)) return;
-  delete monthData[key];
-  delete actualData[key];
-  saveData();
-  selectedMultiMonth = null;
-  renderMultiMonth();
 }
 
 // ============================================================
@@ -2020,7 +1920,6 @@ function addExpense() {
   document.getElementById('expName').value   = '';
   document.getElementById('expAmount').value = '';
   saveBudgetData();
-  syncKakeiboToActual(key); // 家計簿支出を実績に自動同期
   renderKakeibo();
 }
 
@@ -2028,7 +1927,6 @@ function deleteExpense(idx) {
   const key = getMonthKey();
   expenseData[key].splice(idx, 1);
   saveBudgetData();
-  syncKakeiboToActual(key);
   renderKakeibo();
 }
 
@@ -2444,35 +2342,10 @@ function editExpense(idx) {
       amount:   Number(document.getElementById('mAmount').value),
       category: Number(document.getElementById('mCat').value),
     };
-    saveBudgetData(); syncKakeiboToActual(key); renderKakeibo();
+    saveBudgetData(); renderKakeibo();
   });
 }
 
-// ============================================================
-// 家計簿支出 → 実績支払いへ自動同期
-// ============================================================
-function syncKakeiboToActual(key) {
-  ensureMonthData(key, actualData);
-  // 既存の「家計簿自動」エントリを一旦削除
-  actualData[key].payments = actualData[key].payments.filter(p => !p._kakeibo);
-  // 家計簿支出を1件ずつ追加
-  const exps = expenseData[key] || [];
-  exps.forEach(e => {
-    actualData[key].payments.push({
-      date:     e.date,
-      name:     `[家計簿] ${budgetCategories[e.category]?.name || '?'}: ${e.name}`,
-      amount:   e.amount,
-      account:  0, // デフォルト口座（将来的に設定可能にする余地あり）
-      _kakeibo: true, // 自動同期フラグ
-    });
-  });
-  saveData();
-}
-
-// 起動時に全月を同期
-function syncAllKakeiboToActual() {
-  Object.keys(expenseData).forEach(key => syncKakeiboToActual(key));
-}
 // ============================================================
 function exportData() {
   const payload = {
