@@ -1037,13 +1037,27 @@ function saveData()     {
   localStorage.setItem('aData', JSON.stringify(actualData));
   localStorage.setItem('monthBalances', JSON.stringify(monthBalances));
 }
-function loadData()     {
-  const d=localStorage.getItem('mData'); if(d) monthData=JSON.parse(d);
-  const a=localStorage.getItem('aData'); if(a) actualData=JSON.parse(a);
-  const b=localStorage.getItem('monthBalances'); if(b) monthBalances=JSON.parse(b);
+function loadData() {
+  try {
+    const d = localStorage.getItem('mData');
+    if (d) monthData = JSON.parse(d);
+  } catch(e) { console.warn('monthData読み込み失敗、リセットします', e); monthData = {}; }
+  try {
+    const a = localStorage.getItem('aData');
+    if (a) actualData = JSON.parse(a);
+  } catch(e) { console.warn('actualData読み込み失敗、リセットします', e); actualData = {}; }
+  try {
+    const b = localStorage.getItem('monthBalances');
+    if (b) monthBalances = JSON.parse(b);
+  } catch(e) { console.warn('monthBalances読み込み失敗、リセットします', e); monthBalances = {}; }
 }
 function saveAccounts() { localStorage.setItem('accounts', JSON.stringify(accounts)); alert('保存しました'); }
-function loadAccounts() { const d=localStorage.getItem('accounts'); if(d) accounts=JSON.parse(d); }
+function loadAccounts() {
+  try {
+    const d = localStorage.getItem('accounts');
+    if (d) accounts = JSON.parse(d);
+  } catch(e) { console.warn('accounts読み込み失敗、リセットします', e); accounts = []; }
+}
 
 function resetAll() {
   if (!confirm('全データをリセットしますか？この操作は取り消せません。')) return;
@@ -1769,16 +1783,24 @@ function saveBudgetData() {
   localStorage.setItem('zeroDays', JSON.stringify(zeroDays));
 }
 function loadBudgetData() {
-  const c = localStorage.getItem('budgetCats');
-  budgetCategories = c ? JSON.parse(c) : JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
-  const e = localStorage.getItem('expenseData');
-  expenseData = e ? JSON.parse(e) : {};
-  const m = localStorage.getItem('monthTotalBudget');
-  monthTotalBudget = m ? JSON.parse(m) : {};
+  try {
+    const c = localStorage.getItem('budgetCats');
+    budgetCategories = c ? JSON.parse(c) : JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+  } catch(e) { console.warn('budgetCats読み込み失敗', e); budgetCategories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES)); }
+  try {
+    const e = localStorage.getItem('expenseData');
+    expenseData = e ? JSON.parse(e) : {};
+  } catch(e) { console.warn('expenseData読み込み失敗', e); expenseData = {}; }
+  try {
+    const m = localStorage.getItem('monthTotalBudget');
+    monthTotalBudget = m ? JSON.parse(m) : {};
+  } catch(e) { console.warn('monthTotalBudget読み込み失敗', e); monthTotalBudget = {}; }
+  try {
+    const z = localStorage.getItem('zeroDays');
+    zeroDays = z ? JSON.parse(z) : {};
+  } catch(e) { console.warn('zeroDays読み込み失敗', e); zeroDays = {}; }
   const bm = localStorage.getItem('budgetMode');
   budgetMode = bm || 'category';
-  const z = localStorage.getItem('zeroDays');
-  zeroDays = z ? JSON.parse(z) : {};
 }
 
 function saveBudgets() {
