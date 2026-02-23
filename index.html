@@ -1569,10 +1569,6 @@ function buildBalanceTable(incomesSum, paymentsSum, postBalances, openBalances) 
   rows.push({label:'＋ 入金', vals: incomesSum, cls:'amount-pos'});
   rows.push({label:'－ 支払い', vals: paymentsSum, cls:'amount-neg'});
   rows.push({label: hasOpen ? '月末見込' : '収支', vals: endBal, highlight: true});
-  if (minBals.some(v => v > 0)) {
-    rows.push({label:'最低残高', vals: minBals, cls:'amount-neutral'});
-    rows.push({label:'過不足', vals: overUnder, cls:'', overunder: true});
-  }
 
   let html = `<table class="balance-table">
     <tr><th>項目</th>${accounts.map(a=>`<th>${a.name}</th>`).join('')}<th>合計</th></tr>`;
