@@ -399,6 +399,7 @@ select option { background: var(--surface2); }
 .balance-table tr:last-child td { border-bottom: none; }
 .balance-table .row-highlight { background: rgba(79,142,247,0.05); }
 .balance-table .row-total td { font-weight: 700; background: rgba(79,142,247,0.08); border-top: 1px solid var(--accent); }
+.balance-table .row-overunder td { font-weight: 600; background: rgba(0,0,0,0.15); border-top: 1px dashed var(--border); }
 .amount-neg { color: var(--danger); font-family: var(--mono); }
 .amount-pos { color: var(--success); font-family: var(--mono); }
 .amount-neutral { font-family: var(--mono); }
@@ -678,14 +679,16 @@ select option { background: var(--surface2); }
 
     <!-- Dashboard -->
     <div class="page active" id="page-dashboard">
+      <div class="card">
+        <div class="card-title">残高サマリー</div>
+        <div class="tabs">
+          <button class="tab-btn active" onclick="switchTab('summary','dash-forecast',this)">予測</button>
+          <button class="tab-btn" onclick="switchTab('summary','dash-actual',this)">実績</button>
+        </div>
+        <div id="dash-forecast" class="tab-content active"></div>
+        <div id="dash-actual"   class="tab-content"></div>
+      </div>
 
-      <!-- 口座別残高フロー -->
-      <div id="accountFlowCards"></div>
-
-      <!-- 合計サマリー -->
-      <div class="stat-grid" id="statGrid"></div>
-
-      <!-- 推奨振替 -->
       <div class="card">
         <div class="card-title">推奨振替</div>
         <div class="margin-control">
@@ -1541,29 +1544,53 @@ function calcBalances(data) {
   return {postBalances: balances, incomesSum, paymentsSum, prePayment};
 }
 
-function buildBalanceTable(incomesSum, paymentsSum, postBalances) {
-  const fmtAmt = (v, cls='') => {
+function buildBalanceTable(incomesSum, paymentsSum, postBalances, openBalances) {
+  const total = (arr) => arr.reduce((s,v) => s+v, 0);
+  const fmtVal = (v, cls) => {
     const neg = v < 0;
-    return `<span class="${cls || (neg ? 'amount-neg' : 'amount-neutral')}">${neg ? '-' : ''}${Math.abs(v).toLocaleString()}円</span>`;
+    const c = cls || (neg ? 'amount-neg' : v > 0 ? 'amount-pos' : 'amount-neutral');
+    return `<span class="${c}">${neg ? '-' : (cls==='amount-pos'?'+':'')}${Math.abs(v).toLocaleString()}円</span>`;
   };
 
-  let rows = [
-    {label:'入金合計', vals: incomesSum, cls:'amount-pos'},
-    {label:'支払合計', vals: paymentsSum, cls:'amount-neg'},
-    {label:'収支', vals: postBalances, highlight:true},
-  ];
+  const hasOpen = openBalances && openBalances.some(v => v != null);
 
-  const total = (arr) => arr.reduce((s,v) => s+v, 0);
+  // 月末見込 = 月初 + 入金 - 支払い（月初なければ収支のみ）
+  const endBal = accounts.map((_, i) => {
+    const o = (openBalances && openBalances[i] != null) ? openBalances[i] : 0;
+    return o + (incomesSum[i] || 0) - (paymentsSum[i] || 0);
+  });
+  const minBals = accounts.map(a => a.minBalance || 0);
+  const overUnder = endBal.map((v, i) => v - minBals[i]);
+
+  let rows = [];
+  if (hasOpen) {
+    rows.push({label:'月初残高', vals: openBalances.map(v => v ?? 0), cls:'amount-neutral'});
+  }
+  rows.push({label:'＋ 入金', vals: incomesSum, cls:'amount-pos'});
+  rows.push({label:'－ 支払い', vals: paymentsSum, cls:'amount-neg'});
+  rows.push({label: hasOpen ? '月末見込' : '収支', vals: endBal, highlight: true});
+  if (minBals.some(v => v > 0)) {
+    rows.push({label:'最低残高', vals: minBals, cls:'amount-neutral'});
+    rows.push({label:'過不足', vals: overUnder, cls:'', overunder: true});
+  }
 
   let html = `<table class="balance-table">
     <tr><th>項目</th>${accounts.map(a=>`<th>${a.name}</th>`).join('')}<th>合計</th></tr>`;
 
   rows.forEach((r, ri) => {
-    const rowClass = r.highlight ? 'row-total' : (ri%2===0 ? '' : 'row-highlight');
+    const rowClass = r.highlight ? 'row-total' : r.overunder ? 'row-overunder' : (ri%2===0 ? '' : 'row-highlight');
     html += `<tr class="${rowClass}">
       <td>${r.label}</td>
-      ${r.vals.map(v => `<td>${fmtAmt(v, r.cls || '')}</td>`).join('')}
-      <td>${fmtAmt(total(r.vals), r.cls || '')}</td>
+      ${r.vals.map((v,i) => {
+        if (r.overunder) {
+          const cls = v >= 0 ? 'amount-pos' : 'amount-neg';
+          return `<td>${fmtVal(v, cls)}</td>`;
+        }
+        return `<td>${fmtVal(v, r.cls)}</td>`;
+      }).join('')}
+      <td>${r.overunder
+        ? fmtVal(total(r.vals), total(r.vals)>=0?'amount-pos':'amount-neg')
+        : fmtVal(total(r.vals), r.cls||'')}</td>
     </tr>`;
   });
   html += '</table>';
@@ -1574,91 +1601,33 @@ function buildBalanceTable(incomesSum, paymentsSum, postBalances) {
 // Dashboard
 // ============================================================
 function renderDashboard() {
-  const key  = getMonthKey();
-  const aData = actualData[key];
+  const key    = getMonthKey();
+  const fData  = monthData[key];
+  const aData  = actualData[key];
+  const mbData = monthBalances[key] || {};
 
-  // 実績の入金・支払い合計（口座別）
+  // 月初残高（口座残高設定から）
+  const openBalances = accounts.map((_, i) => mbData[i]?.open ?? null);
+
+  // 予測の入金・支払い合計
+  const {incomesSum: fInc, paymentsSum: fPay} = calcBalances(fData);
+  // 実績の入金・支払い合計
   const {incomesSum: aInc, paymentsSum: aPay} = calcBalances(aData);
 
-  // 口座フローカード
-  const flowDiv = document.getElementById('accountFlowCards');
-  if (flowDiv && accounts.length > 0) {
-    const mbData = monthBalances[key] || {};
-    let currentBalances = [];
+  // 予測月末見込残高（振替計算に使う）
+  const fEndBal = accounts.map((_, i) => {
+    const o = openBalances[i] ?? 0;
+    return o + (fInc[i] || 0) - (fPay[i] || 0);
+  });
 
-    const cards = accounts.map((acc, i) => {
-      const openBal  = mbData[i]?.open  ?? null;
-      const closeBal = mbData[i]?.close ?? null;
-      const inc  = aInc[i]  || 0;
-      const pay  = aPay[i]  || 0;
-      const minBal = acc.minBalance || 0;
+  const fDiv = document.getElementById('dash-forecast');
+  const aDiv = document.getElementById('dash-actual');
+  if (fDiv) fDiv.innerHTML = buildBalanceTable(fInc, fPay, fEndBal, openBalances);
+  if (aDiv) aDiv.innerHTML = buildBalanceTable(aInc, aPay,
+    accounts.map((_,i) => (openBalances[i]??0) + (aInc[i]||0) - (aPay[i]||0)),
+    openBalances);
 
-      // 現在残高の計算
-      // 月末残高が入力されていればそれを優先、なければ月初＋収支
-      let current;
-      if (closeBal != null) {
-        current = closeBal;
-      } else if (openBal != null) {
-        current = openBal + inc - pay;
-      } else {
-        current = inc - pay;
-      }
-      currentBalances.push(current);
-
-      const diff = current - minBal;
-      const fcClass = current < 0 ? 'fc-danger' : current < minBal ? 'fc-warn' : 'fc-ok';
-      const balColor = current < 0 ? 'neg' : current < minBal ? 'warn' : 'pos';
-
-      const openRow = openBal != null
-        ? `<div class="flow-row"><span class="flow-lbl">月初残高</span><span class="flow-val">${openBal.toLocaleString()}円</span></div>`
-        : `<div class="flow-row"><span class="flow-lbl">月初残高</span><span class="flow-val" style="color:var(--text3);">未入力</span></div>`;
-      const closeRow = closeBal != null
-        ? `<div class="flow-row"><span class="flow-lbl">月末残高（入力値）</span><span class="flow-val">${closeBal.toLocaleString()}円</span></div>`
-        : '';
-
-      return `
-        <div class="flow-card ${fcClass}">
-          <div class="flow-card-name">🏦 ${acc.name}</div>
-          ${openRow}
-          ${inc > 0 ? `<div class="flow-row"><span class="flow-lbl">＋ 入金</span><span class="flow-val pos">+${inc.toLocaleString()}円</span></div>` : ''}
-          ${pay > 0 ? `<div class="flow-row"><span class="flow-lbl">－ 支払い</span><span class="flow-val neg">-${pay.toLocaleString()}円</span></div>` : ''}
-          ${closeRow}
-          <div class="flow-row flow-result">
-            <span class="flow-lbl">${closeBal != null ? '月末残高' : '現在残高（試算）'}</span>
-            <span class="flow-val ${balColor}">${current.toLocaleString()}円</span>
-          </div>
-          ${minBal > 0 ? `<div class="flow-minbal">最低残高 ${minBal.toLocaleString()}円 まで ${diff >= 0 ? `余裕 +${diff.toLocaleString()}円` : `不足 ${diff.toLocaleString()}円`}</div>` : ''}
-        </div>`;
-    }).join('');
-
-    flowDiv.innerHTML = `<div class="flow-cards-grid">${cards}</div>`;
-
-    // 振替テーブルに現在残高を渡す
-    renderTransferTable(currentBalances);
-  } else if (flowDiv) {
-    flowDiv.innerHTML = '<div class="empty-state" style="margin-bottom:20px;">口座がありません。口座設定から追加してください。</div>';
-  }
-
-  // 合計サマリー
-  const totalInc = aInc.reduce((s,v) => s+v, 0);
-  const totalPay = aPay.reduce((s,v) => s+v, 0);
-  const statGrid = document.getElementById('statGrid');
-  if (statGrid) {
-    statGrid.innerHTML = `
-      <div class="stat-card">
-        <div class="stat-label">入金合計（実績）</div>
-        <div class="stat-value pos">+${totalInc.toLocaleString()}円</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">支払合計（実績）</div>
-        <div class="stat-value neg">-${totalPay.toLocaleString()}円</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">収支</div>
-        <div class="stat-value ${totalInc-totalPay>=0?'pos':'neg'}">${totalInc-totalPay>=0?'+':''}${(totalInc-totalPay).toLocaleString()}円</div>
-      </div>
-    `;
-  }
+  renderTransferTable(fEndBal);
 }
 
 // ============================================================
