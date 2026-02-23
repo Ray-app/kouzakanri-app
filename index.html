@@ -627,6 +627,7 @@ select option { background: var(--surface2); }
     <button class="nav-btn active" onclick="showPage('dashboard', this)"><span class="nav-icon">📊</span>ダッシュボード</button>
     <button class="nav-btn" onclick="showPage('forecast', this)"><span class="nav-icon">🔮</span>予測入力</button>
     <button class="nav-btn" onclick="showPage('actual', this)"><span class="nav-icon">✅</span>実績入力</button>
+    <button class="nav-btn" onclick="showPage('balances', this)"><span class="nav-icon">🏦</span>口座残高設定</button>
     <div class="sidebar-section">家計簿</div>
     <button class="nav-btn" onclick="showPage('kakeibo', this)"><span class="nav-icon">📒</span>家計簿・予算管理</button>
     <div class="sidebar-section">分析</div>
@@ -792,6 +793,31 @@ select option { background: var(--surface2); }
       </div>
     </div>
 
+    <!-- 口座残高設定（独立ページ） -->
+    <div class="page" id="page-balances">
+      <div class="card">
+        <div class="card-title">🏦 口座残高設定</div>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px;">月ごとの実際の口座残高を記録します。月次グラフの残高推移に反映されます。</p>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+          <button class="btn btn-ghost btn-sm" onclick="mbChangeMonth(-1)">‹ 前月</button>
+          <span id="mbMonthLabel" style="font-family:var(--mono);font-size:17px;font-weight:700;color:var(--accent);min-width:90px;text-align:center;">-</span>
+          <button class="btn btn-ghost btn-sm" onclick="mbChangeMonth(1)">次月 ›</button>
+          <button class="btn btn-sm" style="background:rgba(79,142,247,0.15);color:var(--accent);border:none;" onclick="mbGoToday()">今月</button>
+        </div>
+        <div id="mbInputGrid" style="display:flex;flex-direction:column;gap:10px;"></div>
+        <div style="margin-top:20px;display:flex;align-items:center;gap:12px;">
+          <button class="btn btn-primary" onclick="saveMonthBalances()">💾 残高を保存</button>
+          <span id="mbSaveStatus" style="font-size:12px;color:var(--success);"></span>
+        </div>
+      </div>
+
+      <!-- 入力済み月一覧 -->
+      <div class="card">
+        <div class="card-title">入力済み月一覧</div>
+        <div id="mbSummaryGrid"></div>
+      </div>
+    </div>
+
     </div>
 
     <!-- Data Transfer -->
@@ -892,6 +918,7 @@ select option { background: var(--surface2); }
           <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
             <button class="btn btn-ghost btn-sm" onclick="addCategory()">＋ カテゴリ追加</button>
             <button class="btn btn-primary btn-sm" onclick="saveBudgets()">💾 カテゴリ予算を保存</button>
+            <button class="btn btn-ghost btn-sm" onclick="resetToDefaultCategories()" style="color:var(--text3);">🔄 デフォルトに戻す</button>
           </div>
         </div>
       </div>
@@ -964,6 +991,8 @@ select option { background: var(--surface2); }
 let accounts = [];
 let monthData   = {}; // key: "YYYY-MM", value: {incomes:[], payments:[]}
 let actualData  = {}; // same structure
+// 月別口座残高: { "YYYY-MM": { 0: {open, close}, 1: {open, close}, ... } }
+let monthBalances = {};
 
 let currentYear  = new Date().getFullYear();
 let currentMonth = new Date().getMonth() + 1;
@@ -1008,8 +1037,16 @@ function setTodayDefaults() {
 // ============================================================
 // Persistence
 // ============================================================
-function saveData()     { localStorage.setItem('mData', JSON.stringify(monthData)); localStorage.setItem('aData', JSON.stringify(actualData)); }
-function loadData()     { const d=localStorage.getItem('mData'); if(d) monthData=JSON.parse(d); const a=localStorage.getItem('aData'); if(a) actualData=JSON.parse(a); }
+function saveData()     {
+  localStorage.setItem('mData', JSON.stringify(monthData));
+  localStorage.setItem('aData', JSON.stringify(actualData));
+  localStorage.setItem('monthBalances', JSON.stringify(monthBalances));
+}
+function loadData()     {
+  const d=localStorage.getItem('mData'); if(d) monthData=JSON.parse(d);
+  const a=localStorage.getItem('aData'); if(a) actualData=JSON.parse(a);
+  const b=localStorage.getItem('monthBalances'); if(b) monthBalances=JSON.parse(b);
+}
 function saveAccounts() { localStorage.setItem('accounts', JSON.stringify(accounts)); alert('保存しました'); }
 function loadAccounts() { const d=localStorage.getItem('accounts'); if(d) accounts=JSON.parse(d); }
 
@@ -1031,7 +1068,10 @@ function showPage(id, btn) {
   if (id === 'trend')      renderTrendCharts();
   if (id === 'multimonth') renderMultiMonth();
   if (id === 'dashboard')  renderDashboard();
-  if (id === 'kakeibo')    renderKakeibo();}
+  if (id === 'kakeibo')    renderKakeibo();
+  if (id === 'settings')   renderAccountSettings();
+  if (id === 'balances')   { renderMbInputs(); renderMbSummary(); }
+}
 
 function switchTab(group, tabId, btn) {
   const parent = btn.closest('.card');
@@ -1198,6 +1238,128 @@ function deleteAccount(i) {
   renderAccountSettings();
   updateAccountSelects();
   renderDashboard();
+}
+
+// ============================================================
+// 月初・月末残高管理
+// ============================================================
+let mbYear  = new Date().getFullYear();
+let mbMonth = new Date().getMonth() + 1;
+
+function mbGetKey() { return `${mbYear}-${String(mbMonth).padStart(2,'0')}`; }
+
+function mbChangeMonth(delta) {
+  mbMonth += delta;
+  if (mbMonth > 12) { mbMonth = 1; mbYear++; }
+  if (mbMonth < 1)  { mbMonth = 12; mbYear--; }
+  renderMbInputs();
+}
+
+function mbGoToday() {
+  const n = new Date();
+  mbYear = n.getFullYear(); mbMonth = n.getMonth() + 1;
+  renderMbInputs();
+}
+
+function renderMbInputs() {
+  const lbl = document.getElementById('mbMonthLabel');
+  if (lbl) lbl.textContent = `${mbYear}/${String(mbMonth).padStart(2,'0')}`;
+  const grid = document.getElementById('mbInputGrid');
+  if (!grid) return;
+  const key = mbGetKey();
+  const stored = monthBalances[key] || {};
+  grid.innerHTML = accounts.map((acc, i) => {
+    const ob = stored[i]?.open  ?? '';
+    const cb = stored[i]?.close ?? '';
+    return `
+      <div style="display:grid;grid-template-columns:120px 1fr 1fr;gap:10px;align-items:center;
+                  background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;">
+        <span style="font-size:13px;font-weight:700;color:var(--text);">${acc.name}</span>
+        <div style="display:flex;flex-direction:column;gap:3px;">
+          <label style="font-size:11px;color:var(--text3);">月初残高（円）</label>
+          <input type="number" id="mb_open_${i}" value="${ob}" placeholder="0"
+            style="background:var(--bg);border:1px solid var(--border);color:var(--text);
+                   padding:6px 10px;border-radius:6px;font-family:var(--mono);font-size:13px;outline:none;width:100%;">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px;">
+          <label style="font-size:11px;color:var(--text3);">月末残高（円）</label>
+          <input type="number" id="mb_close_${i}" value="${cb}" placeholder="0"
+            style="background:var(--bg);border:1px solid var(--border);color:var(--text);
+                   padding:6px 10px;border-radius:6px;font-family:var(--mono);font-size:13px;outline:none;width:100%;">
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function saveMonthBalances() {
+  const key = mbGetKey();
+  monthBalances[key] = {};
+  accounts.forEach((_, i) => {
+    const o = document.getElementById(`mb_open_${i}`)?.value;
+    const c = document.getElementById(`mb_close_${i}`)?.value;
+    if (o !== '' || c !== '') {
+      monthBalances[key][i] = {
+        open:  o !== '' ? Number(o) : null,
+        close: c !== '' ? Number(c) : null,
+      };
+    }
+  });
+  saveData();
+  const st = document.getElementById('mbSaveStatus');
+  if (st) { st.textContent = '✓ 保存しました'; setTimeout(() => st.textContent = '', 3000); }
+  renderTrendCharts();
+  renderMbSummary();
+}
+
+function renderMbSummary() {
+  const div = document.getElementById('mbSummaryGrid');
+  if (!div) return;
+  const keys = Object.keys(monthBalances).filter(k => Object.keys(monthBalances[k]).length > 0).sort().reverse();
+  if (keys.length === 0) {
+    div.innerHTML = '<div class="empty-state">まだ残高が入力されていません</div>';
+    return;
+  }
+  div.innerHTML = keys.map(k => {
+    const rows = accounts.map((acc, i) => {
+      const mb = monthBalances[k]?.[i];
+      if (!mb) return '';
+      const o = mb.open  != null ? mb.open.toLocaleString()  + '円' : '—';
+      const c = mb.close != null ? mb.close.toLocaleString() + '円' : '—';
+      const diff = (mb.close != null && mb.open != null) ? mb.close - mb.open : null;
+      const diffHtml = diff != null
+        ? `<span style="font-family:var(--mono);font-size:12px;color:${diff>=0?'var(--success)':'var(--danger)'};">${diff>=0?'+':''}${diff.toLocaleString()}円</span>`
+        : '';
+      return `<div style="display:flex;align-items:center;gap:12px;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border);">
+        <span style="min-width:100px;color:var(--text2);">${acc.name}</span>
+        <span style="font-family:var(--mono);color:var(--text3);font-size:12px;">月初</span>
+        <span style="font-family:var(--mono);">${o}</span>
+        <span style="font-family:var(--mono);color:var(--text3);font-size:12px;">→ 月末</span>
+        <span style="font-family:var(--mono);">${c}</span>
+        ${diffHtml}
+        <button class="tx-del" style="margin-left:auto;" onclick="deleteMbEntry('${k}',${i})">✕</button>
+      </div>`;
+    }).filter(Boolean).join('');
+    return `<div style="margin-bottom:16px;">
+      <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent);margin-bottom:8px;
+                  cursor:pointer;" onclick="mbJumpTo('${k}')">${k} ✎</div>
+      ${rows}
+    </div>`;
+  }).join('');
+}
+
+function deleteMbEntry(key, i) {
+  if (!monthBalances[key]) return;
+  delete monthBalances[key][i];
+  if (Object.keys(monthBalances[key]).length === 0) delete monthBalances[key];
+  saveData();
+  renderMbSummary();
+  renderTrendCharts();
+}
+
+function mbJumpTo(key) {
+  const [y, m] = key.split('-').map(Number);
+  mbYear = y; mbMonth = m;
+  renderMbInputs();
 }
 
 function updateAccountSelects() {
@@ -1486,28 +1648,44 @@ function renderTrendCharts() {
   const labels = months;
   const colors = ['#4f8ef7','#3ecf8e','#f7596a','#f0a847','#7c6af5','#f782c2','#45cde4','#a8e86c'];
 
-  // 実績残高推移
-  const aDatasets = accounts.map((acc, ai) => ({
-    label: acc.name,
+  // 口座残高推移（月初・月末データ優先、なければ実績計算）
+  const openDatasets = accounts.map((acc, ai) => ({
+    label: acc.name + '（月初）',
     data: months.map(k => {
+      const mb = monthBalances[k]?.[ai];
+      if (mb?.open != null) return mb.open;
+      return null; // データなしはnull
+    }),
+    borderColor: colors[ai % colors.length],
+    backgroundColor: 'transparent',
+    borderDash: [4, 4],
+    tension: 0.3, fill: false, pointRadius: 3,
+    spanGaps: true,
+  }));
+  const closeDatasets = accounts.map((acc, ai) => ({
+    label: acc.name + '（月末）',
+    data: months.map(k => {
+      const mb = monthBalances[k]?.[ai];
+      if (mb?.close != null) return mb.close;
+      // フォールバック: 実績計算
       const {postBalances} = calcBalances(actualData[k]);
-      return postBalances[ai] ?? 0;
+      return postBalances[ai] ?? null;
     }),
     borderColor: colors[ai % colors.length],
     backgroundColor: colors[ai % colors.length] + '22',
     tension: 0.3, fill: false, pointRadius: 4,
+    spanGaps: true,
   }));
-  buildLineChart('actualTrendChart', labels, aDatasets);
+  buildLineChart('actualTrendChart', labels, [...closeDatasets, ...openDatasets]);
 
-  // 実績ベース収支棒グラフ
-  const incData = months.map(k => (actualData[k]?.incomes  || []).reduce((s,t) => s+t.amount, 0));
-  const expData = months.map(k => (actualData[k]?.payments || []).reduce((s,t) => s+t.amount, 0));
-  // 家計簿支出合計を加算
-  const kakeiboTotalData = months.map(k => (expenseData[k] || []).reduce((s,e) => s+e.amount, 0));
+  // 収支サマリー（家計簿支出は除外）
+  const incData = months.map(k => (actualData[k]?.incomes || [])
+    .filter(t => !t._kakeibo).reduce((s,t) => s+t.amount, 0));
+  const expData = months.map(k => (actualData[k]?.payments || [])
+    .filter(t => !t._kakeibo).reduce((s,t) => s+t.amount, 0));
   buildBarChart('incomeExpenseChart', labels, [
-    {label:'入金（実績）',   data: incData,         backgroundColor: '#3ecf8e99', borderColor:'#3ecf8e', borderWidth:1},
-    {label:'支払（実績）',   data: expData,         backgroundColor: '#f7596a99', borderColor:'#f7596a', borderWidth:1},
-    {label:'家計簿支出',     data: kakeiboTotalData, backgroundColor: '#f0a84799', borderColor:'#f0a847', borderWidth:1},
+    {label:'入金（実績）', data: incData, backgroundColor: '#3ecf8e99', borderColor:'#3ecf8e', borderWidth:1},
+    {label:'支払（実績）', data: expData, backgroundColor: '#f7596a99', borderColor:'#f7596a', borderWidth:1},
   ]);
 
   // 家計簿 カテゴリ別積み上げ棒グラフ
@@ -1733,6 +1911,14 @@ function saveBudgets() {
 function addCategory() {
   budgetCategories.push({name:'新カテゴリ', budget:0});
   renderBudgetSettings();
+}
+
+function resetToDefaultCategories() {
+  if (!confirm('カテゴリをデフォルトのプリセットに戻しますか？\n現在のカテゴリ設定は上書きされます（支出データは残ります）。')) return;
+  budgetCategories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+  saveBudgetData();
+  updateExpCategorySelect();
+  renderKakeibo();
 }
 
 function deleteCategory(i) {
@@ -2285,6 +2471,7 @@ function exportData() {
     monthTotalBudget,
     budgetMode,
     zeroDays,
+    monthBalances,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
   const url  = URL.createObjectURL(blob);
@@ -2317,6 +2504,7 @@ function importData(input) {
       monthTotalBudget  = data.monthTotalBudget   || {};
       budgetMode        = data.budgetMode         || 'category';
       zeroDays          = data.zeroDays           || {};
+      monthBalances     = data.monthBalances      || {};
 
       // 保存
       saveData();
