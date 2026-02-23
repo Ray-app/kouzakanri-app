@@ -968,8 +968,13 @@ select option { background: var(--surface2); }
 
       <!-- 支出リスト -->
       <div class="card">
-        <div class="card-title">支出一覧</div>
-        <div id="expenseList"></div>
+        <div class="card-title" onclick="toggleExpenseList()" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;">
+          <span>支出一覧</span>
+          <span id="expenseListToggleIcon" style="font-size:12px;color:var(--text3);margin-left:auto;">▲ 閉じる</span>
+        </div>
+        <div id="expenseListWrap">
+          <div id="expenseList"></div>
+        </div>
       </div>
 
       <!-- 日別支出カレンダー表 -->
@@ -1919,6 +1924,16 @@ function resetToDefaultCategories() {
   saveBudgetData();
   updateExpCategorySelect();
   renderKakeibo();
+}
+
+// 支出一覧の開閉
+let expenseListOpen = true;
+function toggleExpenseList() {
+  expenseListOpen = !expenseListOpen;
+  const wrap = document.getElementById('expenseListWrap');
+  const icon = document.getElementById('expenseListToggleIcon');
+  if (wrap) wrap.style.display = expenseListOpen ? '' : 'none';
+  if (icon) icon.textContent = expenseListOpen ? '▲ 閉じる' : '▼ 開く';
 }
 
 function deleteCategory(i) {
