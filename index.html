@@ -483,7 +483,7 @@ select option { background: var(--surface2); }
   /* サイドバーを非表示にしてボトムナビに切り替え */
   .main { grid-template-columns: 1fr; }
   .sidebar { display: none; }
-  .content { padding: 12px 12px 80px; } /* ボトムナビ分のpadding */
+  .content { padding: 12px 12px 80px; } /* ボトムナビ分のpadding-bottom */
 
   /* フォームを縦積みに */
   .form-row { flex-direction: column; }
@@ -2293,7 +2293,11 @@ function renderKakeibo() {
   // 乖離ボックス
   const kaihiBox = document.getElementById('kaihiBox');
   if (kaihiBox) {
-    kaihiBox.innerHTML = `
+    if (totalBudget === 0) {
+      kaihiBox.style.display = 'none';
+    } else {
+      kaihiBox.style.display = '';
+      kaihiBox.innerHTML = `
       <div class="kaihi-item">
         <span class="kaihi-label">月予算</span>
         <span class="kaihi-value" style="color:var(--accent)">${totalBudget.toLocaleString()}円</span>
@@ -2326,26 +2330,32 @@ function renderKakeibo() {
         </span>
       </div>
     `;
+    }
   }
 
   // ペースバー（全体）
   const paceSection = document.getElementById('paceSection');
   if (paceSection) {
-    const spentPct  = Math.min(totalSpent / totalBudget * 100, 100);
-    const timePct   = Math.min(daysPassed / daysInMonth * 100, 100);
-    const barColor  = spentPct > timePct + 5 ? 'var(--danger)' : spentPct < timePct - 5 ? 'var(--success)' : 'var(--accent)';
-    paceSection.innerHTML = `
-      <div style="margin-bottom:6px;font-size:13px;color:var(--text2);">全体ペース（${daysPassed}/${daysInMonth}日経過）</div>
-      <div class="pace-bar-wrap">
-        <label>支出進捗</label>
-        <div class="pace-bar">
-          <div class="pace-fill" style="width:${spentPct}%;background:${barColor};"></div>
-          <div class="pace-marker" style="left:${timePct}%;"></div>
+    if (totalBudget === 0) {
+      paceSection.style.display = 'none';
+    } else {
+      paceSection.style.display = '';
+      const spentPct  = Math.min(totalSpent / totalBudget * 100, 100);
+      const timePct   = Math.min(daysPassed / daysInMonth * 100, 100);
+      const barColor  = spentPct > timePct + 5 ? 'var(--danger)' : spentPct < timePct - 5 ? 'var(--success)' : 'var(--accent)';
+      paceSection.innerHTML = `
+        <div style="margin-bottom:6px;font-size:13px;color:var(--text2);">全体ペース（${daysPassed}/${daysInMonth}日経過）</div>
+        <div class="pace-bar-wrap">
+          <label>支出進捗</label>
+          <div class="pace-bar">
+            <div class="pace-fill" style="width:${spentPct}%;background:${barColor};"></div>
+            <div class="pace-marker" style="left:${timePct}%;"></div>
+          </div>
+          <span class="pace-value" style="color:${barColor};">${Math.round(spentPct)}%</span>
         </div>
-        <span class="pace-value" style="color:${barColor};">${Math.round(spentPct)}%</span>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:4px;">│ = 時間経過 ${Math.round(timePct)}%（黄線）</div>
-    `;
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">│ = 時間経過 ${Math.round(timePct)}%（黄線）</div>
+      `;
+    }
   }
 
   // カテゴリ別カード
