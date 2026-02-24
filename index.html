@@ -6,6 +6,7 @@
 <title>口座管理 | Account Manager</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 :root {
   --bg: #0f1117;
@@ -1087,8 +1088,13 @@ select option { background: var(--surface2); }
       </div>
 
       <!-- 日別支出カレンダー表 -->
-      <div class="card">
-        <div class="card-title">日別支出表</div>
+      <div class="card" id="dailyTableCard">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <div class="card-title" style="margin:0;">日別支出表</div>
+          <button class="btn btn-ghost btn-sm" onclick="saveDailyTableImage()" style="gap:5px;">
+            📷 画像で保存
+          </button>
+        </div>
         <div style="font-size:12px;color:var(--text3);margin-bottom:12px;">縦：日付 ／ 横：カテゴリ ／ 右端：1日目標 vs 実績</div>
         <div id="dailyTableWrap" style="overflow-x:auto;"></div>
       </div>
@@ -1718,22 +1724,37 @@ function renderTrendCharts() {
   const labels = months;
   const colors = ['#4f8ef7','#3ecf8e','#f7596a','#f0a847','#7c6af5','#f782c2','#45cde4','#a8e86c'];
 
-  const openDatasets = accounts.map((acc, ai) => ({
-    label: acc.name + '（月初）',
-    data: months.map(k => monthBalances[k]?.[ai]?.open ?? null),
-    borderColor: colors[ai % colors.length],
-    backgroundColor: 'transparent',
-    borderDash: [4, 4],
-    tension: 0.3, fill: false, pointRadius: 3, spanGaps: true,
-  }));
+  const openDatasets = [];  // ①月初ラインは表示しない
+
+  // 各口座の月末残高ライン
   const closeDatasets = accounts.map((acc, ai) => ({
-    label: acc.name + '（月末）',
+    label: acc.name,
     data: months.map(k => monthBalances[k]?.[ai]?.close ?? null),
     borderColor: colors[ai % colors.length],
     backgroundColor: colors[ai % colors.length] + '22',
     tension: 0.3, fill: false, pointRadius: 4, spanGaps: true,
   }));
-  buildLineChart('actualTrendChart', labels, [...closeDatasets, ...openDatasets]);
+
+  // ③ 全口座合算ライン
+  const totalDataset = {
+    label: '💰 合計資産',
+    data: months.map(k => {
+      const vals = accounts.map((_, ai) => monthBalances[k]?.[ai]?.close ?? null);
+      // 1口座でも null でない月だけ合計を出す
+      if (vals.every(v => v === null)) return null;
+      return vals.reduce((s, v) => s + (v ?? 0), 0);
+    }),
+    borderColor: '#ffffff',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 2.5,
+    borderDash: [6, 3],
+    tension: 0.3, fill: false, pointRadius: 5,
+    pointBackgroundColor: '#ffffff',
+    spanGaps: true,
+    order: 0,  // 最前面
+  };
+
+  buildLineChart('actualTrendChart', labels, [...closeDatasets, totalDataset]);
 
   const incData = months.map(k => (actualData[k]?.incomes  || []).reduce((s,t) => s+t.amount, 0));
   const expData = months.map(k => (actualData[k]?.payments || []).reduce((s,t) => s+t.amount, 0));
@@ -2470,8 +2491,76 @@ function editExpense(idx) {
 }
 
 // ============================================================
-// Export / Import
+// ② 日別支出表を画像で保存
 // ============================================================
+function saveDailyTableImage() {
+  const wrap = document.getElementById('dailyTableWrap');
+  if (!wrap || !wrap.querySelector('table')) {
+    alert('表示する日別支出表がありません');
+    return;
+  }
+
+  // 一時的にラップのスクロール制限を外して全体を描画
+  const origOverflow = wrap.style.overflow;
+  const origWidth    = wrap.style.width;
+  wrap.style.overflow = 'visible';
+  wrap.style.width    = 'max-content';
+
+  const monthLabel = `${currentYear}年${currentMonth}月`;
+
+  html2canvas(wrap, {
+    backgroundColor: '#0f1117',
+    scale: 2,                   // 2x で高解像度
+    useCORS: true,
+    logging: false,
+    onclone: (doc) => {
+      // クローン内でもスクロール制限を外す
+      const cloneWrap = doc.getElementById('dailyTableWrap');
+      if (cloneWrap) {
+        cloneWrap.style.overflow = 'visible';
+        cloneWrap.style.width    = 'max-content';
+      }
+    }
+  }).then(canvas => {
+    // 上部にタイトル行を付ける
+    const titleHeight = 48;
+    const final = document.createElement('canvas');
+    final.width  = canvas.width;
+    final.height = canvas.height + titleHeight * 2;
+    const ctx = final.getContext('2d');
+
+    // 背景
+    ctx.fillStyle = '#1a1d27';
+    ctx.fillRect(0, 0, final.width, final.height);
+
+    // タイトル
+    ctx.fillStyle = '#4f8ef7';
+    ctx.font = `bold ${28}px 'DM Mono', monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`${monthLabel} 日別支出表`, final.width / 2, titleHeight);
+
+    // 表本体
+    ctx.drawImage(canvas, 0, titleHeight * 1.4);
+
+    // ダウンロード
+    const a = document.createElement('a');
+    a.href     = final.toDataURL('image/png');
+    a.download = `daily-expense-${currentYear}-${String(currentMonth).padStart(2,'0')}.png`;
+    a.click();
+
+    // スタイル戻す
+    wrap.style.overflow = origOverflow;
+    wrap.style.width    = origWidth;
+  }).catch(err => {
+    console.error('画像保存エラー:', err);
+    alert('画像の生成に失敗しました');
+    wrap.style.overflow = origOverflow;
+    wrap.style.width    = origWidth;
+  });
+}
+
+// ============================================================
+
 function exportData() {
   const payload = {
     version: 1,
