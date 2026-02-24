@@ -475,10 +475,86 @@ select option { background: var(--surface2); }
 
 /* Responsive */
 @media (max-width: 768px) {
+  /* ヘッダー */
+  .app-header h1 { font-size: 16px; }
+  .app-header h1 span { display: none; }
+  .month-display { font-size: 14px; min-width: 76px; }
+
+  /* サイドバーを非表示にしてボトムナビに切り替え */
   .main { grid-template-columns: 1fr; }
-  .sidebar { flex-direction: row; flex-wrap: wrap; padding: 12px; border-right: none; border-bottom: 1px solid var(--border); }
-  .content { padding: 16px; }
+  .sidebar { display: none; }
+  .content { padding: 12px 12px 80px; } /* ボトムナビ分のpadding */
+
+  /* フォームを縦積みに */
   .form-row { flex-direction: column; }
+  .form-group { min-width: unset !important; width: 100%; }
+
+  /* カードのpadding縮小 */
+  .card { padding: 14px; }
+  .card-title { font-size: 14px; }
+
+  /* テーブルスクロール */
+  .balance-table { font-size: 12px; }
+  .balance-table th, .balance-table td { padding: 6px 8px; }
+
+  /* stat-grid 2列 */
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* tx-item スマホ対応 */
+  .tx-item { flex-wrap: wrap; gap: 4px; }
+  .tx-item .tx-name { flex: 1; min-width: 120px; }
+  .tx-item .tx-account { display: none; }
+
+  /* account-grid 1列 */
+  .account-grid { grid-template-columns: 1fr; }
+
+  /* flow-cards 1列 */
+  .flow-cards-grid { grid-template-columns: 1fr; }
+
+  /* モーダル */
+  .modal { min-width: unset; width: 95%; padding: 20px; }
+
+  /* タブ */
+  .tab-btn { padding: 8px 12px; font-size: 13px; }
+}
+
+/* ボトムナビゲーションバー（スマホ専用） */
+.bottom-nav {
+  display: none;
+}
+@media (max-width: 768px) {
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    z-index: 100;
+    height: 64px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .bottom-nav-btn {
+    flex: 1;
+    min-width: 56px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    color: var(--text3);
+    font-size: 10px;
+    font-family: var(--sans);
+    cursor: pointer;
+    padding: 8px 4px;
+    transition: color 0.15s;
+    white-space: nowrap;
+  }
+  .bottom-nav-btn .bnav-icon { font-size: 20px; }
+  .bottom-nav-btn.active { color: var(--accent); }
+  .bottom-nav-btn:hover { color: var(--text); }
 }
 
 .empty-state { text-align: center; padding: 40px; color: var(--text3); font-size: 14px; }
@@ -801,6 +877,19 @@ select option { background: var(--surface2); }
           <canvas id="kakeiboExpenseChart"></canvas>
         </div>
       </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div class="card-title" style="margin:0;">家計簿 カテゴリ別支出（今月）</div>
+          <div style="display:flex;gap:6px;">
+            <button id="pieChartBtn" class="btn btn-primary btn-sm" onclick="setPieMode('pie')">🥧 円グラフ</button>
+            <button id="doughnutChartBtn" class="btn btn-ghost btn-sm" onclick="setPieMode('doughnut')">🍩 ドーナツ</button>
+          </div>
+        </div>
+        <div class="chart-container" style="max-width:400px;margin:0 auto;">
+          <canvas id="kakeiboPieChart"></canvas>
+        </div>
+        <div id="pieLegend" style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;"></div>
+      </div>
     </div>
 
     <!-- Multi Month -->
@@ -1012,6 +1101,17 @@ select option { background: var(--surface2); }
   </main>
 </div>
 
+<!-- ボトムナビゲーション（スマホ用） -->
+<nav class="bottom-nav" id="bottomNav">
+  <button class="bottom-nav-btn active" onclick="showPage('dashboard', this, true)"><span class="bnav-icon">📊</span>ダッシュボード</button>
+  <button class="bottom-nav-btn" onclick="showPage('forecast', this, true)"><span class="bnav-icon">🔮</span>予測</button>
+  <button class="bottom-nav-btn" onclick="showPage('actual', this, true)"><span class="bnav-icon">✅</span>実績</button>
+  <button class="bottom-nav-btn" onclick="showPage('kakeibo', this, true)"><span class="bnav-icon">📒</span>家計簿</button>
+  <button class="bottom-nav-btn" onclick="showPage('balances', this, true)"><span class="bnav-icon">🏦</span>残高設定</button>
+  <button class="bottom-nav-btn" onclick="showPage('trend', this, true)"><span class="bnav-icon">📈</span>グラフ</button>
+  <button class="bottom-nav-btn" onclick="showPage('settings', this, true)"><span class="bnav-icon">⚙️</span>設定</button>
+</nav>
+
 <script>
 // ============================================================
 // State
@@ -1101,11 +1201,23 @@ function resetAll() {
 // ============================================================
 // Navigation / Month
 // ============================================================
-function showPage(id, btn) {
+function showPage(id, btn, fromBottomNav) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
-  btn.classList.add('active');
+
+  // サイドバーのactive更新
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  // ボトムナビのactive更新
+  document.querySelectorAll('.bottom-nav-btn').forEach(b => b.classList.remove('active'));
+  // 押されたボタンをactive化
+  if (btn) btn.classList.add('active');
+  // もう一方のナビも同期
+  if (fromBottomNav) {
+    document.querySelectorAll(`.nav-btn[onclick*="'${id}'"]`).forEach(b => b.classList.add('active'));
+  } else {
+    document.querySelectorAll(`.bottom-nav-btn[onclick*="'${id}'"]`).forEach(b => b.classList.add('active'));
+  }
+
   if (id === 'trend')      renderTrendCharts();
   if (id === 'dashboard')  renderDashboard();
   if (id === 'kakeibo')    renderKakeibo();
@@ -1720,7 +1832,7 @@ function renderTrendCharts() {
       backgroundColor: CAT_COLORS[ci % CAT_COLORS.length] + 'cc',
       borderColor: CAT_COLORS[ci % CAT_COLORS.length],
       borderWidth: 1,
-    })).filter(ds => ds.data.some(v => v > 0)); // 支出ゼロのカテゴリは除外
+    })).filter(ds => ds.data.some(v => v > 0));
 
     const ctx = document.getElementById('kakeiboExpenseChart');
     if (ctx) {
@@ -1740,6 +1852,81 @@ function renderTrendCharts() {
         },
       });
     }
+  }
+
+  // 今月の円グラフ
+  renderPieChart();
+}
+
+let pieMode = 'pie';
+function setPieMode(mode) {
+  pieMode = mode;
+  document.getElementById('pieChartBtn').className     = mode === 'pie'      ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  document.getElementById('doughnutChartBtn').className = mode === 'doughnut' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  renderPieChart();
+}
+
+function renderPieChart() {
+  const key = getMonthKey();
+  const expenses = expenseData[key] || [];
+  const ctx = document.getElementById('kakeiboPieChart');
+  const legendDiv = document.getElementById('pieLegend');
+  if (!ctx) return;
+
+  const pieData = budgetCategories.map((cat, ci) =>
+    expenses.filter(e => e.category === ci).reduce((s,e) => s+e.amount, 0)
+  );
+  const total = pieData.reduce((s,v) => s+v, 0);
+  const hasData = pieData.some(v => v > 0);
+
+  if (charts['kakeiboPieChart']) { charts['kakeiboPieChart'].destroy(); delete charts['kakeiboPieChart']; }
+
+  if (!hasData) {
+    if (legendDiv) legendDiv.innerHTML = '<span style="color:var(--text3);font-size:13px;">今月の支出データがありません</span>';
+    return;
+  }
+
+  const activeLabels = budgetCategories.map((c,i) => ({name:c.name, val:pieData[i], i})).filter(d => d.val > 0);
+
+  charts['kakeiboPieChart'] = new Chart(ctx.getContext('2d'), {
+    type: pieMode,
+    data: {
+      labels: activeLabels.map(d => d.name),
+      datasets: [{
+        data: activeLabels.map(d => d.val),
+        backgroundColor: activeLabels.map(d => CAT_COLORS[d.i % CAT_COLORS.length] + 'dd'),
+        borderColor: activeLabels.map(d => CAT_COLORS[d.i % CAT_COLORS.length]),
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed;
+              const pct = total > 0 ? (v / total * 100).toFixed(1) : 0;
+              return ` ${v.toLocaleString()}円 (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // カスタム凡例
+  if (legendDiv) {
+    legendDiv.innerHTML = activeLabels.map(d => {
+      const pct = total > 0 ? (d.val / total * 100).toFixed(1) : 0;
+      return `<div style="display:flex;align-items:center;gap:5px;font-size:12px;">
+        <span style="width:10px;height:10px;border-radius:2px;background:${CAT_COLORS[d.i % CAT_COLORS.length]};flex-shrink:0;"></span>
+        <span style="color:var(--text2);">${d.name}</span>
+        <span style="font-family:var(--mono);color:var(--text);font-weight:600;">${d.val.toLocaleString()}円</span>
+        <span style="color:var(--text3);">${pct}%</span>
+      </div>`;
+    }).join('');
   }
 }
 
