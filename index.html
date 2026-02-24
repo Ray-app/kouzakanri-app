@@ -1800,9 +1800,10 @@ const DEFAULT_CATEGORIES = [
   {name:'その他',   budget:10000},
 ];
 
-let budgetCategories = []; // [{name, budget}]
-let expenseData = {};       // key: "YYYY-MM", value: [{date,name,amount,category}]
-let zeroDays = {};          // key: "YYYY-MM", value: ["YYYY-MM-DD", ...]  支出ゼロ確定日
+let budgetCategories = []; // [{name}]  ← 金額はmonthCatBudgetで管理
+let expenseData = {};
+let zeroDays = {};
+let monthCatBudget = {}; // { "YYYY-MM": [金額, 金額, ...] }  月別カテゴリ予算
 
 // ---- persistence ----
 function saveBudgetData() {
@@ -1811,11 +1812,13 @@ function saveBudgetData() {
   localStorage.setItem('monthTotalBudget', JSON.stringify(monthTotalBudget));
   localStorage.setItem('budgetMode', budgetMode);
   localStorage.setItem('zeroDays', JSON.stringify(zeroDays));
+  localStorage.setItem('monthCatBudget', JSON.stringify(monthCatBudget));
 }
 function loadBudgetData() {
   try {
     const c = localStorage.getItem('budgetCats');
     budgetCategories = c ? JSON.parse(c) : JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+    // 旧データ互換: budgetにnameしか入ってない場合もOK
   } catch(e) { console.warn('budgetCats読み込み失敗', e); budgetCategories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES)); }
   try {
     const e = localStorage.getItem('expenseData');
@@ -1829,6 +1832,16 @@ function loadBudgetData() {
     const z = localStorage.getItem('zeroDays');
     zeroDays = z ? JSON.parse(z) : {};
   } catch(e) { console.warn('zeroDays読み込み失敗', e); zeroDays = {}; }
+  try {
+    const mc = localStorage.getItem('monthCatBudget');
+    if (mc) {
+      monthCatBudget = JSON.parse(mc);
+    } else {
+      // 旧データ移行: budgetCategories[i].budget → 全月共通として扱う
+      // 新規の場合は空のまま（DEFAULT_CATEGORIESの金額をフォールバックで使う）
+      monthCatBudget = {};
+    }
+  } catch(e) { console.warn('monthCatBudget読み込み失敗', e); monthCatBudget = {}; }
   const bm = localStorage.getItem('budgetMode');
   budgetMode = bm || 'category';
 }
@@ -1924,10 +1937,9 @@ function getEffectiveTotalBudget() {
   if (budgetMode === 'total') {
     return monthTotalBudget[key] || 0;
   } else if (budgetMode === 'both') {
-    // 合計予算が設定されていればそちら優先、なければカテゴリ合計
-    return monthTotalBudget[key] || budgetCategories.reduce((s,c) => s+c.budget, 0);
+    return monthTotalBudget[key] || getCatBudgets(key).reduce((s,v) => s+v, 0);
   } else {
-    return budgetCategories.reduce((s,c) => s+c.budget, 0);
+    return getCatBudgets(key).reduce((s,v) => s+v, 0);
   }
 }
 
@@ -2005,24 +2017,65 @@ function updateZeroDayBtn() {
 }
 
 // ---- render budget settings ----
+// 現在月のカテゴリ予算を取得（未設定ならデフォルト値にフォールバック）
+function getCatBudget(monthKey, catIdx) {
+  if (monthCatBudget[monthKey] && monthCatBudget[monthKey][catIdx] != null)
+    return monthCatBudget[monthKey][catIdx];
+  // 旧データ互換: budgetCategories[i].budget があれば使う
+  return budgetCategories[catIdx]?.budget || 0;
+}
+
+function getCatBudgets(monthKey) {
+  return budgetCategories.map((_, i) => getCatBudget(monthKey, i));
+}
+
 function renderBudgetSettings() {
   const div = document.getElementById('budgetSettingsRows');
   if (!div) return;
-  const totalBudget = budgetCategories.reduce((s,c) => s+c.budget, 0);
+  const key = getMonthKey();
+  const budgets = getCatBudgets(key);
+  const totalBudget = budgets.reduce((s,v) => s+v, 0);
   div.innerHTML = `
-    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">月間予算合計: <span style="font-family:var(--mono);color:var(--accent);">${totalBudget.toLocaleString()}円</span></div>
-    ${budgetCategories.map((c,i) => `
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">
+      ${currentYear}年${currentMonth}月の予算合計:
+      <span style="font-family:var(--mono);color:var(--accent);">${totalBudget.toLocaleString()}円</span>
+      <span style="color:var(--text3);margin-left:8px;">（月ごとに個別設定できます）</span>
+    </div>
+    ${budgetCategories.map((c, i) => `
       <div class="budget-settings-row">
         <span class="category-dot" style="background:${CAT_COLORS[i%CAT_COLORS.length]}"></span>
         <span class="cat-label">
           <input class="cat-name-input" type="text" value="${c.name}" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-family:var(--sans);font-size:13px;width:100px;">
         </span>
-        <input class="cat-budget-input" type="number" value="${c.budget}" style="width:120px;" placeholder="予算（円）">
+        <input class="cat-budget-input" type="number" value="${budgets[i]}" style="width:120px;" placeholder="予算（円）">
         <span style="font-size:12px;color:var(--text3);">円/月</span>
         <button class="btn btn-danger btn-sm" onclick="deleteCategory(${i})">削除</button>
       </div>
     `).join('')}
   `;
+}
+
+function saveBudgets() {
+  const key = getMonthKey();
+  const rows = document.querySelectorAll('.budget-settings-row');
+  const newNames = [];
+  const newBudgets = [];
+  rows.forEach(row => {
+    const nameEl   = row.querySelector('.cat-name-input');
+    const budgetEl = row.querySelector('.cat-budget-input');
+    if (nameEl && budgetEl) {
+      newNames.push(nameEl.value.trim() || '未入力');
+      newBudgets.push(Number(budgetEl.value) || 0);
+    }
+  });
+  // カテゴリ名を更新
+  budgetCategories = newNames.map((name, i) => ({name, budget: newBudgets[i]}));
+  // 今月の予算を保存
+  monthCatBudget[key] = [...newBudgets];
+  saveBudgetData();
+  updateExpCategorySelect();
+  renderKakeibo();
+  alert('予算を保存しました');
 }
 
 // ---- main kakeibo render ----
@@ -2114,19 +2167,21 @@ function renderKakeibo() {
     if (budgetCategories.length === 0) {
       catGrid.innerHTML = '<div class="empty-state">カテゴリを設定してください</div>';
     } else {
+      const budgets = getCatBudgets(key);
       catGrid.innerHTML = budgetCategories.map((c, i) => {
-        const spent = expenses.filter(e => e.category === i).reduce((s,e) => s+e.amount, 0);
-        const pct   = c.budget > 0 ? Math.min(spent / c.budget * 100, 100) : 0;
-        const over  = spent > c.budget;
-        const color = pct > 90 ? 'var(--danger)' : pct > 70 ? 'var(--warn)' : CAT_COLORS[i%CAT_COLORS.length];
-        const remain = c.budget - spent;
+        const budget = budgets[i];
+        const spent  = expenses.filter(e => e.category === i).reduce((s,e) => s+e.amount, 0);
+        const pct    = budget > 0 ? Math.min(spent / budget * 100, 100) : 0;
+        const over   = spent > budget;
+        const color  = pct > 90 ? 'var(--danger)' : pct > 70 ? 'var(--warn)' : CAT_COLORS[i%CAT_COLORS.length];
+        const remain = budget - spent;
         return `
           <div class="budget-cat-card">
             <div class="cat-name">
               <span class="category-dot" style="background:${CAT_COLORS[i%CAT_COLORS.length]}"></span>
               ${c.name}
             </div>
-            <div class="cat-budget">予算 ${c.budget.toLocaleString()}円</div>
+            <div class="cat-budget">予算 ${budget.toLocaleString()}円</div>
             <div class="budget-progress-bar">
               <div class="budget-progress-fill" style="width:${pct}%;background:${color};"></div>
             </div>
@@ -2397,6 +2452,7 @@ function exportData() {
     budgetMode,
     zeroDays,
     monthBalances,
+    monthCatBudget,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
   const url  = URL.createObjectURL(blob);
@@ -2430,6 +2486,7 @@ function importData(input) {
       budgetMode        = data.budgetMode         || 'category';
       zeroDays          = data.zeroDays           || {};
       monthBalances     = data.monthBalances      || {};
+      monthCatBudget    = data.monthCatBudget     || {};
 
       // 保存
       saveData();
