@@ -892,7 +892,6 @@ select option { background: var(--surface2); }
       </div>
     </div>
 
-    <!-- Multi Month -->
     <!-- Settings -->
     <div class="page" id="page-settings">
       <div class="card">
@@ -928,8 +927,6 @@ select option { background: var(--surface2); }
         <div class="card-title">入力済み月一覧</div>
         <div id="mbSummaryGrid"></div>
       </div>
-    </div>
-
     </div>
 
     <!-- Data Transfer -->
@@ -1117,18 +1114,15 @@ select option { background: var(--surface2); }
 // State
 // ============================================================
 let accounts = [];
-let monthData   = {}; // key: "YYYY-MM", value: {incomes:[], payments:[]}
-let actualData  = {}; // same structure
-// 月別口座残高: { "YYYY-MM": { 0: {open, close}, 1: {open, close}, ... } }
+let monthData   = {};
+let actualData  = {};
 let monthBalances = {};
 
 let currentYear  = new Date().getFullYear();
 let currentMonth = new Date().getMonth() + 1;
 let charts = {};
 
-// 予算モード: 'category' | 'total' | 'both'
 let budgetMode = 'category';
-// 月別合計予算: { "YYYY-MM": number }
 let monthTotalBudget = {};
 
 // ============================================================
@@ -1153,7 +1147,6 @@ function setTodayDefaults() {
     const el = document.getElementById(id);
     if (el && !el.value) el.value = today;
   });
-  // expDate変更時にゼロ円ボタン状態を更新
   const expDateEl = document.getElementById('expDate');
   if (expDateEl) {
     expDateEl.addEventListener('change', updateZeroDayBtn);
@@ -1164,31 +1157,19 @@ function setTodayDefaults() {
 // ============================================================
 // Persistence
 // ============================================================
-function saveData()     {
+function saveData() {
   localStorage.setItem('mData', JSON.stringify(monthData));
   localStorage.setItem('aData', JSON.stringify(actualData));
   localStorage.setItem('monthBalances', JSON.stringify(monthBalances));
 }
 function loadData() {
-  try {
-    const d = localStorage.getItem('mData');
-    if (d) monthData = JSON.parse(d);
-  } catch(e) { console.warn('monthData読み込み失敗、リセットします', e); monthData = {}; }
-  try {
-    const a = localStorage.getItem('aData');
-    if (a) actualData = JSON.parse(a);
-  } catch(e) { console.warn('actualData読み込み失敗、リセットします', e); actualData = {}; }
-  try {
-    const b = localStorage.getItem('monthBalances');
-    if (b) monthBalances = JSON.parse(b);
-  } catch(e) { console.warn('monthBalances読み込み失敗、リセットします', e); monthBalances = {}; }
+  try { const d = localStorage.getItem('mData'); if (d) monthData = JSON.parse(d); } catch(e) { monthData = {}; }
+  try { const a = localStorage.getItem('aData'); if (a) actualData = JSON.parse(a); } catch(e) { actualData = {}; }
+  try { const b = localStorage.getItem('monthBalances'); if (b) monthBalances = JSON.parse(b); } catch(e) { monthBalances = {}; }
 }
 function saveAccounts() { localStorage.setItem('accounts', JSON.stringify(accounts)); alert('保存しました'); }
 function loadAccounts() {
-  try {
-    const d = localStorage.getItem('accounts');
-    if (d) accounts = JSON.parse(d);
-  } catch(e) { console.warn('accounts読み込み失敗、リセットします', e); accounts = []; }
+  try { const d = localStorage.getItem('accounts'); if (d) accounts = JSON.parse(d); } catch(e) { accounts = []; }
 }
 
 function resetAll() {
@@ -1205,13 +1186,9 @@ function showPage(id, btn, fromBottomNav) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
 
-  // サイドバーのactive更新
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  // ボトムナビのactive更新
   document.querySelectorAll('.bottom-nav-btn').forEach(b => b.classList.remove('active'));
-  // 押されたボタンをactive化
   if (btn) btn.classList.add('active');
-  // もう一方のナビも同期
   if (fromBottomNav) {
     document.querySelectorAll(`.nav-btn[onclick*="'${id}'"]`).forEach(b => b.classList.add('active'));
   } else {
@@ -1241,7 +1218,6 @@ function changeMonth(delta) {
   renderDashboard();
   renderForecastList();
   renderActualList();
-  // 家計簿ページが表示中なら更新
   if (document.getElementById('page-kakeibo').classList.contains('active')) renderKakeibo();
 }
 
@@ -1261,23 +1237,11 @@ let mpYear = new Date().getFullYear();
 
 function toggleMonthPicker() {
   const overlay = document.getElementById('monthPickerOverlay');
-  if (overlay.classList.contains('open')) {
-    closeMonthPicker();
-  } else {
-    mpYear = currentYear;
-    renderMonthPicker();
-    overlay.classList.add('open');
-  }
+  if (overlay.classList.contains('open')) { closeMonthPicker(); }
+  else { mpYear = currentYear; renderMonthPicker(); overlay.classList.add('open'); }
 }
-
-function closeMonthPicker() {
-  document.getElementById('monthPickerOverlay').classList.remove('open');
-}
-
-function mpChangeYear(delta) {
-  mpYear += delta;
-  renderMonthPicker();
-}
+function closeMonthPicker() { document.getElementById('monthPickerOverlay').classList.remove('open'); }
+function mpChangeYear(delta) { mpYear += delta; renderMonthPicker(); }
 
 function renderMonthPicker() {
   document.getElementById('mpYear').textContent = mpYear + '年';
@@ -1286,8 +1250,8 @@ function renderMonthPicker() {
   const grid = document.getElementById('mpGrid');
   grid.innerHTML = MONTHS.map((m, i) => {
     const mn = i + 1;
-    const isActive  = mpYear === currentYear && mn === currentMonth;
-    const isToday   = mpYear === now.getFullYear() && mn === now.getMonth() + 1;
+    const isActive = mpYear === currentYear && mn === currentMonth;
+    const isToday  = mpYear === now.getFullYear() && mn === now.getMonth() + 1;
     let cls = 'mp-month-btn';
     if (isActive) cls += ' active';
     else if (isToday) cls += ' today-mark';
@@ -1296,12 +1260,8 @@ function renderMonthPicker() {
 }
 
 function selectMonth(year, month) {
-  currentYear  = year;
-  currentMonth = month;
-  updateMonthDisplay();
-  renderDashboard();
-  renderForecastList();
-  renderActualList();
+  currentYear = year; currentMonth = month;
+  updateMonthDisplay(); renderDashboard(); renderForecastList(); renderActualList();
   if (document.getElementById('page-kakeibo').classList.contains('active')) renderKakeibo();
   closeMonthPicker();
 }
@@ -1309,9 +1269,7 @@ function selectMonth(year, month) {
 function updateMonthDisplay() {
   document.getElementById('monthDisplay').textContent = `${currentYear}/${String(currentMonth).padStart(2,'0')}`;
 }
-
 function getMonthKey() { return `${currentYear}-${String(currentMonth).padStart(2,'0')}`; }
-
 function ensureMonthData(key, obj) { if (!obj[key]) obj[key] = {incomes:[], payments:[]}; }
 
 // ============================================================
@@ -1322,7 +1280,6 @@ function addAccount() {
   const newIdx = accounts.length - 1;
   renderAccountSettings();
   updateAccountSelects();
-  // 追加直後にすぐ編集モーダルを開く
   editAccount(newIdx);
 }
 
@@ -1370,12 +1327,10 @@ function editAccount(i) {
       </select>
     </div>`;
   openModal(`「${acc.name}」を編集`, body, () => {
-    accounts[i].name           = document.getElementById('mAccName').value.trim() || acc.name;
-    accounts[i].minBalance     = Number(document.getElementById('mAccMinBalance').value) || 0;
-    accounts[i].transferable   = document.getElementById('mAccTransfer').value === '1';
-    renderAccountSettings();
-    updateAccountSelects();
-    renderDashboard();
+    accounts[i].name         = document.getElementById('mAccName').value.trim() || acc.name;
+    accounts[i].minBalance   = Number(document.getElementById('mAccMinBalance').value) || 0;
+    accounts[i].transferable = document.getElementById('mAccTransfer').value === '1';
+    renderAccountSettings(); updateAccountSelects(); renderDashboard();
   });
 }
 
@@ -1383,9 +1338,7 @@ function deleteAccount(i) {
   if (accounts.length <= 1) { alert('口座は最低1つ必要です'); return; }
   if (!confirm(`「${accounts[i].name}」を削除しますか？`)) return;
   accounts.splice(i, 1);
-  renderAccountSettings();
-  updateAccountSelects();
-  renderDashboard();
+  renderAccountSettings(); updateAccountSelects(); renderDashboard();
 }
 
 // ============================================================
@@ -1404,8 +1357,7 @@ function mbChangeMonth(delta) {
 }
 
 function mbGoToday() {
-  const n = new Date();
-  mbYear = n.getFullYear(); mbMonth = n.getMonth() + 1;
+  const n = new Date(); mbYear = n.getFullYear(); mbMonth = n.getMonth() + 1;
   renderMbInputs();
 }
 
@@ -1499,15 +1451,12 @@ function deleteMbEntry(key, i) {
   if (!monthBalances[key]) return;
   delete monthBalances[key][i];
   if (Object.keys(monthBalances[key]).length === 0) delete monthBalances[key];
-  saveData();
-  renderMbSummary();
-  renderTrendCharts();
+  saveData(); renderMbSummary(); renderTrendCharts();
 }
 
 function mbJumpTo(key) {
   const [y, m] = key.split('-').map(Number);
-  mbYear = y; mbMonth = m;
-  renderMbInputs();
+  mbYear = y; mbMonth = m; renderMbInputs();
 }
 
 function updateAccountSelects() {
@@ -1567,7 +1516,6 @@ function renderForecastList() {
     div.innerHTML = '<div class="empty-state">この月のデータはありません</div>';
     return;
   }
-
   const all = [
     ...data.incomes.map((t,i) => ({...t, type:'income', i})),
     ...data.payments.map((t,i) => ({...t, type:'payment', i})),
@@ -1625,8 +1573,9 @@ function renderActualList() {
   </div>`;
 
   if (tableDiv) {
-    const {postBalances, incomesSum, paymentsSum} = calcBalances(actualData[key]);
-    tableDiv.innerHTML = buildBalanceTable(incomesSum, paymentsSum, postBalances);
+    const {incomesSum, paymentsSum} = calcBalances(actualData[key]);
+    tableDiv.innerHTML = buildBalanceTable(incomesSum, paymentsSum,
+      accounts.map((_,i) => (incomesSum[i]||0) - (paymentsSum[i]||0)));
   }
 }
 
@@ -1643,17 +1592,14 @@ function calcBalances(data) {
   let balances    = accounts.map(() => 0);
   let incomesSum  = Array(accounts.length).fill(0);
   let paymentsSum = Array(accounts.length).fill(0);
-
   if (!data) return {postBalances: balances, incomesSum, paymentsSum};
-
   (data.incomes || []).forEach(t => {
     if (t.account < accounts.length) { balances[t.account] += t.amount; incomesSum[t.account] += t.amount; }
   });
-  const prePayment = [...balances];
   (data.payments || []).forEach(t => {
     if (t.account < accounts.length) { balances[t.account] -= t.amount; paymentsSum[t.account] += t.amount; }
   });
-  return {postBalances: balances, incomesSum, paymentsSum, prePayment};
+  return {postBalances: balances, incomesSum, paymentsSum};
 }
 
 function buildBalanceTable(incomesSum, paymentsSum, postBalances, openBalances) {
@@ -1665,40 +1611,25 @@ function buildBalanceTable(incomesSum, paymentsSum, postBalances, openBalances) 
   };
 
   const hasOpen = openBalances && openBalances.some(v => v != null);
-
-  // 月末見込 = 月初 + 入金 - 支払い（月初なければ収支のみ）
   const endBal = accounts.map((_, i) => {
     const o = (openBalances && openBalances[i] != null) ? openBalances[i] : 0;
     return o + (incomesSum[i] || 0) - (paymentsSum[i] || 0);
   });
-  const minBals = accounts.map(a => a.minBalance || 0);
-  const overUnder = endBal.map((v, i) => v - minBals[i]);
 
   let rows = [];
-  if (hasOpen) {
-    rows.push({label:'月初残高', vals: openBalances.map(v => v ?? 0), cls:'amount-neutral'});
-  }
+  if (hasOpen) rows.push({label:'月初残高', vals: openBalances.map(v => v ?? 0), cls:'amount-neutral'});
   rows.push({label:'＋ 入金', vals: incomesSum, cls:'amount-pos'});
   rows.push({label:'－ 支払い', vals: paymentsSum, cls:'amount-neg'});
   rows.push({label: hasOpen ? '月末見込' : '収支', vals: endBal, highlight: true});
 
   let html = `<table class="balance-table">
     <tr><th>項目</th>${accounts.map(a=>`<th>${a.name}</th>`).join('')}<th>合計</th></tr>`;
-
   rows.forEach((r, ri) => {
-    const rowClass = r.highlight ? 'row-total' : r.overunder ? 'row-overunder' : (ri%2===0 ? '' : 'row-highlight');
+    const rowClass = r.highlight ? 'row-total' : (ri%2===0 ? '' : 'row-highlight');
     html += `<tr class="${rowClass}">
       <td>${r.label}</td>
-      ${r.vals.map((v,i) => {
-        if (r.overunder) {
-          const cls = v >= 0 ? 'amount-pos' : 'amount-neg';
-          return `<td>${fmtVal(v, cls)}</td>`;
-        }
-        return `<td>${fmtVal(v, r.cls)}</td>`;
-      }).join('')}
-      <td>${r.overunder
-        ? fmtVal(total(r.vals), total(r.vals)>=0?'amount-pos':'amount-neg')
-        : fmtVal(total(r.vals), r.cls||'')}</td>
+      ${r.vals.map(v => `<td>${fmtVal(v, r.cls)}</td>`).join('')}
+      <td>${fmtVal(total(r.vals), r.cls||'')}</td>
     </tr>`;
   });
   html += '</table>';
@@ -1713,16 +1644,11 @@ function renderDashboard() {
   const fData  = monthData[key];
   const aData  = actualData[key];
   const mbData = monthBalances[key] || {};
-
-  // 月初残高（口座残高設定から）
   const openBalances = accounts.map((_, i) => mbData[i]?.open ?? null);
 
-  // 予測の入金・支払い合計
   const {incomesSum: fInc, paymentsSum: fPay} = calcBalances(fData);
-  // 実績の入金・支払い合計
   const {incomesSum: aInc, paymentsSum: aPay} = calcBalances(aData);
 
-  // 予測月末見込残高（振替計算に使う）
   const fEndBal = accounts.map((_, i) => {
     const o = openBalances[i] ?? 0;
     return o + (fInc[i] || 0) - (fPay[i] || 0);
@@ -1759,8 +1685,7 @@ function renderTransferTable(postBalances) {
       if (transferOnly && !accounts[j].transferable) continue;
       let send = Math.min(Math.floor((balances[j] - minBalJ) / 1000) * 1000, remain);
       if (send <= 0) continue;
-      balances[i] += send;
-      balances[j] -= send;
+      balances[i] += send; balances[j] -= send;
       html += `
         <div class="transfer-row">
           <span class="transfer-from">${accounts[j].name}</span>
@@ -1774,7 +1699,6 @@ function renderTransferTable(postBalances) {
       html += `<div class="transfer-alert">⚠ ${accounts[i].name} に追加で ${remain.toLocaleString()}円 の入金が必要です（最低残高 ${minBal.toLocaleString()}円 確保のため）</div>`;
     }
   });
-
   div.innerHTML = html || '<div class="empty-state" style="padding:20px;">振替は不要です ✓</div>';
 }
 
@@ -1782,9 +1706,10 @@ function renderTransferTable(postBalances) {
 // Trend Charts
 // ============================================================
 function renderTrendCharts() {
+  // [修正③] expenseData のキーも月軸に含める
   const months = getAllMonthKeys().sort();
   if (months.length === 0) {
-    ['actualTrendChart','incomeExpenseChart','kakeiboExpenseChart'].forEach(id => {
+    ['actualTrendChart','incomeExpenseChart','kakeiboExpenseChart','kakeiboPieChart'].forEach(id => {
       if (charts[id]) { charts[id].destroy(); delete charts[id]; }
     });
     return;
@@ -1793,27 +1718,23 @@ function renderTrendCharts() {
   const labels = months;
   const colors = ['#4f8ef7','#3ecf8e','#f7596a','#f0a847','#7c6af5','#f782c2','#45cde4','#a8e86c'];
 
-  // 口座残高推移（口座残高設定ページで入力した月初・月末データを表示）
   const openDatasets = accounts.map((acc, ai) => ({
     label: acc.name + '（月初）',
     data: months.map(k => monthBalances[k]?.[ai]?.open ?? null),
     borderColor: colors[ai % colors.length],
     backgroundColor: 'transparent',
     borderDash: [4, 4],
-    tension: 0.3, fill: false, pointRadius: 3,
-    spanGaps: true,
+    tension: 0.3, fill: false, pointRadius: 3, spanGaps: true,
   }));
   const closeDatasets = accounts.map((acc, ai) => ({
     label: acc.name + '（月末）',
     data: months.map(k => monthBalances[k]?.[ai]?.close ?? null),
     borderColor: colors[ai % colors.length],
     backgroundColor: colors[ai % colors.length] + '22',
-    tension: 0.3, fill: false, pointRadius: 4,
-    spanGaps: true,
+    tension: 0.3, fill: false, pointRadius: 4, spanGaps: true,
   }));
   buildLineChart('actualTrendChart', labels, [...closeDatasets, ...openDatasets]);
 
-  // 収支サマリー
   const incData = months.map(k => (actualData[k]?.incomes  || []).reduce((s,t) => s+t.amount, 0));
   const expData = months.map(k => (actualData[k]?.payments || []).reduce((s,t) => s+t.amount, 0));
   buildBarChart('incomeExpenseChart', labels, [
@@ -1821,14 +1742,10 @@ function renderTrendCharts() {
     {label:'支払（実績）', data: expData, backgroundColor: '#f7596a99', borderColor:'#f7596a', borderWidth:1},
   ]);
 
-  // 家計簿 カテゴリ別積み上げ棒グラフ
   if (budgetCategories.length > 0) {
     const kakeiboDatasets = budgetCategories.map((cat, ci) => ({
       label: cat.name,
-      data: months.map(k => {
-        const exps = expenseData[k] || [];
-        return exps.filter(e => e.category === ci).reduce((s,e) => s+e.amount, 0);
-      }),
+      data: months.map(k => (expenseData[k] || []).filter(e => e.category === ci).reduce((s,e) => s+e.amount, 0)),
       backgroundColor: CAT_COLORS[ci % CAT_COLORS.length] + 'cc',
       borderColor: CAT_COLORS[ci % CAT_COLORS.length],
       borderWidth: 1,
@@ -1842,9 +1759,7 @@ function renderTrendCharts() {
         data: { labels, datasets: kakeiboDatasets },
         options: {
           responsive: true, maintainAspectRatio: false,
-          plugins: {
-            legend: { labels: { color: '#8b90b8', font:{family:"'DM Mono',monospace",size:11} } }
-          },
+          plugins: { legend: { labels: { color: '#8b90b8', font:{family:"'DM Mono',monospace",size:11} } } },
           scales: {
             x: { stacked: true, ticks: {color:'#8b90b8'}, grid:{color:'#2e3350'} },
             y: { stacked: true, ticks: {color:'#8b90b8', callback: v => v.toLocaleString()+'円'}, grid:{color:'#2e3350'} },
@@ -1854,7 +1769,6 @@ function renderTrendCharts() {
     }
   }
 
-  // 今月の円グラフ
   renderPieChart();
 }
 
@@ -1877,11 +1791,10 @@ function renderPieChart() {
     expenses.filter(e => e.category === ci).reduce((s,e) => s+e.amount, 0)
   );
   const total = pieData.reduce((s,v) => s+v, 0);
-  const hasData = pieData.some(v => v > 0);
 
   if (charts['kakeiboPieChart']) { charts['kakeiboPieChart'].destroy(); delete charts['kakeiboPieChart']; }
 
-  if (!hasData) {
+  if (!pieData.some(v => v > 0)) {
     if (legendDiv) legendDiv.innerHTML = '<span style="color:var(--text3);font-size:13px;">今月の支出データがありません</span>';
     return;
   }
@@ -1903,20 +1816,11 @@ function renderPieChart() {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => {
-              const v = ctx.parsed;
-              const pct = total > 0 ? (v / total * 100).toFixed(1) : 0;
-              return ` ${v.toLocaleString()}円 (${pct}%)`;
-            }
-          }
-        }
+        tooltip: { callbacks: { label: ctx => { const v=ctx.parsed; const pct=total>0?(v/total*100).toFixed(1):0; return ` ${v.toLocaleString()}円 (${pct}%)`; } } }
       }
     }
   });
 
-  // カスタム凡例
   if (legendDiv) {
     legendDiv.innerHTML = activeLabels.map(d => {
       const pct = total > 0 ? (d.val / total * 100).toFixed(1) : 0;
@@ -1935,8 +1839,7 @@ function buildLineChart(canvasId, labels, datasets) {
   if (!ctx) return;
   if (charts[canvasId]) charts[canvasId].destroy();
   charts[canvasId] = new Chart(ctx.getContext('2d'), {
-    type: 'line',
-    data: {labels, datasets},
+    type: 'line', data: {labels, datasets},
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { labels: { color: '#8b90b8', font:{family:"'DM Mono',monospace",size:12} } } },
@@ -1953,8 +1856,7 @@ function buildBarChart(canvasId, labels, datasets) {
   if (!ctx) return;
   if (charts[canvasId]) charts[canvasId].destroy();
   charts[canvasId] = new Chart(ctx.getContext('2d'), {
-    type: 'bar',
-    data: {labels, datasets},
+    type: 'bar', data: {labels, datasets},
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { labels: { color: '#8b90b8', font:{family:"'DM Mono',monospace",size:12} } } },
@@ -1966,8 +1868,13 @@ function buildBarChart(canvasId, labels, datasets) {
   });
 }
 
+// [修正③] expenseData のキーも含めるよう修正
 function getAllMonthKeys() {
-  const keys = new Set([...Object.keys(monthData), ...Object.keys(actualData)]);
+  const keys = new Set([
+    ...Object.keys(monthData),
+    ...Object.keys(actualData),
+    ...Object.keys(expenseData),
+  ]);
   return [...keys];
 }
 
@@ -1987,10 +1894,10 @@ const DEFAULT_CATEGORIES = [
   {name:'その他',   budget:10000},
 ];
 
-let budgetCategories = []; // [{name}]  ← 金額はmonthCatBudgetで管理
+let budgetCategories = [];
 let expenseData = {};
 let zeroDays = {};
-let monthCatBudget = {}; // { "YYYY-MM": [金額, 金額, ...] }  月別カテゴリ予算
+let monthCatBudget = {};
 
 // ---- persistence ----
 function saveBudgetData() {
@@ -2002,48 +1909,31 @@ function saveBudgetData() {
   localStorage.setItem('monthCatBudget', JSON.stringify(monthCatBudget));
 }
 function loadBudgetData() {
-  try {
-    const c = localStorage.getItem('budgetCats');
-    budgetCategories = c ? JSON.parse(c) : JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
-    // 旧データ互換: budgetにnameしか入ってない場合もOK
-  } catch(e) { console.warn('budgetCats読み込み失敗', e); budgetCategories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES)); }
-  try {
-    const e = localStorage.getItem('expenseData');
-    expenseData = e ? JSON.parse(e) : {};
-  } catch(e) { console.warn('expenseData読み込み失敗', e); expenseData = {}; }
-  try {
-    const m = localStorage.getItem('monthTotalBudget');
-    monthTotalBudget = m ? JSON.parse(m) : {};
-  } catch(e) { console.warn('monthTotalBudget読み込み失敗', e); monthTotalBudget = {}; }
-  try {
-    const z = localStorage.getItem('zeroDays');
-    zeroDays = z ? JSON.parse(z) : {};
-  } catch(e) { console.warn('zeroDays読み込み失敗', e); zeroDays = {}; }
-  try {
-    const mc = localStorage.getItem('monthCatBudget');
-    if (mc) {
-      monthCatBudget = JSON.parse(mc);
-    } else {
-      // 旧データ移行: budgetCategories[i].budget → 全月共通として扱う
-      // 新規の場合は空のまま（DEFAULT_CATEGORIESの金額をフォールバックで使う）
-      monthCatBudget = {};
-    }
-  } catch(e) { console.warn('monthCatBudget読み込み失敗', e); monthCatBudget = {}; }
+  try { const c = localStorage.getItem('budgetCats'); budgetCategories = c ? JSON.parse(c) : JSON.parse(JSON.stringify(DEFAULT_CATEGORIES)); } catch(e) { budgetCategories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES)); }
+  try { const e = localStorage.getItem('expenseData'); expenseData = e ? JSON.parse(e) : {}; } catch(e) { expenseData = {}; }
+  try { const m = localStorage.getItem('monthTotalBudget'); monthTotalBudget = m ? JSON.parse(m) : {}; } catch(e) { monthTotalBudget = {}; }
+  try { const z = localStorage.getItem('zeroDays'); zeroDays = z ? JSON.parse(z) : {}; } catch(e) { zeroDays = {}; }
+  try { const mc = localStorage.getItem('monthCatBudget'); monthCatBudget = mc ? JSON.parse(mc) : {}; } catch(e) { monthCatBudget = {}; }
   const bm = localStorage.getItem('budgetMode');
   budgetMode = bm || 'category';
 }
 
+// [修正①] saveBudgets は1つだけ定義（重複削除、月別予算対応版のみ残す）
 function saveBudgets() {
-  // collect from inputs
+  const key = getMonthKey();
   const rows = document.querySelectorAll('.budget-settings-row');
-  budgetCategories = [];
+  const newNames = [];
+  const newBudgets = [];
   rows.forEach(row => {
-    const nameEl = row.querySelector('.cat-name-input');
+    const nameEl   = row.querySelector('.cat-name-input');
     const budgetEl = row.querySelector('.cat-budget-input');
     if (nameEl && budgetEl) {
-      budgetCategories.push({name: nameEl.value.trim() || '未入力', budget: Number(budgetEl.value) || 0});
+      newNames.push(nameEl.value.trim() || '未入力');
+      newBudgets.push(Number(budgetEl.value) || 0);
     }
   });
+  budgetCategories = newNames.map((name, i) => ({name, budget: newBudgets[i]}));
+  monthCatBudget[key] = [...newBudgets];
   saveBudgetData();
   updateExpCategorySelect();
   renderKakeibo();
@@ -2083,32 +1973,24 @@ function deleteCategory(i) {
 function setBudgetMode(mode) {
   budgetMode = mode;
   saveBudgetData();
-  ['Cat','Total','Both'].forEach(n => {
-    const btn = document.getElementById('modeBtn'+n);
-    if (btn) btn.classList.toggle('active', mode === n.toLowerCase());
-  });
   applyBudgetModeUI();
 }
 
 function applyBudgetModeUI() {
   const totalRow = document.getElementById('totalBudgetRow');
   const catSec   = document.getElementById('categoryBudgetSection');
-  if (totalRow) totalRow.style.display  = (budgetMode === 'total' || budgetMode === 'both') ? '' : 'none';
-  if (catSec)   catSec.style.display    = (budgetMode === 'category' || budgetMode === 'both') ? '' : 'none';
-  // ボタンアクティブ状態
+  if (totalRow) totalRow.style.display = (budgetMode === 'total' || budgetMode === 'both') ? '' : 'none';
+  if (catSec)   catSec.style.display   = (budgetMode === 'category' || budgetMode === 'both') ? '' : 'none';
   ['Cat','Total','Both'].forEach(n => {
     const btn = document.getElementById('modeBtn'+n);
     if (btn) btn.classList.toggle('active', budgetMode === n.toLowerCase());
   });
-  // 合計予算入力値を今月の設定値で更新
   const key = getMonthKey();
   const inp = document.getElementById('totalBudgetInput');
   if (inp) inp.value = monthTotalBudget[key] || '';
 }
 
-function onTotalBudgetInput() {
-  // リアルタイムで月末予測などを更新したい場合にここで処理
-}
+function onTotalBudgetInput() {}
 
 function saveTotalBudget() {
   const key = getMonthKey();
@@ -2118,16 +2000,11 @@ function saveTotalBudget() {
   renderKakeibo();
 }
 
-// 今月の有効な予算合計を返す
 function getEffectiveTotalBudget() {
   const key = getMonthKey();
-  if (budgetMode === 'total') {
-    return monthTotalBudget[key] || 0;
-  } else if (budgetMode === 'both') {
-    return monthTotalBudget[key] || getCatBudgets(key).reduce((s,v) => s+v, 0);
-  } else {
-    return getCatBudgets(key).reduce((s,v) => s+v, 0);
-  }
+  if (budgetMode === 'total') return monthTotalBudget[key] || 0;
+  if (budgetMode === 'both')  return monthTotalBudget[key] || getCatBudgets(key).reduce((s,v) => s+v, 0);
+  return getCatBudgets(key).reduce((s,v) => s+v, 0);
 }
 
 // ---- selects ----
@@ -2171,11 +2048,8 @@ function toggleZeroDay(dateStr) {
   const monthKey = dateStr.slice(0, 7);
   if (!zeroDays[monthKey]) zeroDays[monthKey] = [];
   const idx = zeroDays[monthKey].indexOf(dateStr);
-  if (idx >= 0) {
-    zeroDays[monthKey].splice(idx, 1);
-  } else {
-    zeroDays[monthKey].push(dateStr);
-  }
+  if (idx >= 0) zeroDays[monthKey].splice(idx, 1);
+  else zeroDays[monthKey].push(dateStr);
   saveBudgetData();
   renderKakeibo();
 }
@@ -2197,18 +2071,16 @@ function updateZeroDayBtn() {
   if (!btn) return;
   const active = isZeroDay(dateStr);
   btn.textContent = active ? '✓ ゼロ円確定済み' : '💤 今日はゼロ円';
-  btn.style.background    = active ? 'rgba(62,207,142,0.15)' : '';
-  btn.style.borderColor   = active ? 'var(--success)' : '';
-  btn.style.color         = active ? 'var(--success)' : '';
+  btn.style.background  = active ? 'rgba(62,207,142,0.15)' : '';
+  btn.style.borderColor = active ? 'var(--success)' : '';
+  btn.style.color       = active ? 'var(--success)' : '';
   if (status) status.textContent = active ? `${dateStr} を支出ゼロ円として記録しています` : '';
 }
 
-// ---- render budget settings ----
-// 現在月のカテゴリ予算を取得（未設定ならデフォルト値にフォールバック）
+// ---- budget settings ----
 function getCatBudget(monthKey, catIdx) {
   if (monthCatBudget[monthKey] && monthCatBudget[monthKey][catIdx] != null)
     return monthCatBudget[monthKey][catIdx];
-  // 旧データ互換: budgetCategories[i].budget があれば使う
   return budgetCategories[catIdx]?.budget || 0;
 }
 
@@ -2232,7 +2104,9 @@ function renderBudgetSettings() {
       <div class="budget-settings-row">
         <span class="category-dot" style="background:${CAT_COLORS[i%CAT_COLORS.length]}"></span>
         <span class="cat-label">
-          <input class="cat-name-input" type="text" value="${c.name}" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-family:var(--sans);font-size:13px;width:100px;">
+          <input class="cat-name-input" type="text" value="${c.name}"
+            style="background:var(--bg);border:1px solid var(--border);color:var(--text);
+                   padding:4px 8px;border-radius:6px;font-family:var(--sans);font-size:13px;width:100px;">
         </span>
         <input class="cat-budget-input" type="number" value="${budgets[i]}" style="width:120px;" placeholder="予算（円）">
         <span style="font-size:12px;color:var(--text3);">円/月</span>
@@ -2242,36 +2116,18 @@ function renderBudgetSettings() {
   `;
 }
 
-function saveBudgets() {
-  const key = getMonthKey();
-  const rows = document.querySelectorAll('.budget-settings-row');
-  const newNames = [];
-  const newBudgets = [];
-  rows.forEach(row => {
-    const nameEl   = row.querySelector('.cat-name-input');
-    const budgetEl = row.querySelector('.cat-budget-input');
-    if (nameEl && budgetEl) {
-      newNames.push(nameEl.value.trim() || '未入力');
-      newBudgets.push(Number(budgetEl.value) || 0);
-    }
-  });
-  // カテゴリ名を更新
-  budgetCategories = newNames.map((name, i) => ({name, budget: newBudgets[i]}));
-  // 今月の予算を保存
-  monthCatBudget[key] = [...newBudgets];
-  saveBudgetData();
-  updateExpCategorySelect();
-  renderKakeibo();
-  alert('予算を保存しました');
-}
-
 // ---- main kakeibo render ----
 function renderKakeibo() {
   renderBudgetSettings();
   updateExpCategorySelect();
   applyBudgetModeUI();
 
-  // 月ラベル更新
+  // [修正②] expenseListWrap の表示状態を renderKakeibo のたびに正しく適用
+  const expWrap = document.getElementById('expenseListWrap');
+  const expIcon = document.getElementById('expenseListToggleIcon');
+  if (expWrap) expWrap.style.display = expenseListOpen ? '' : 'none';
+  if (expIcon) expIcon.textContent = expenseListOpen ? '▲ 閉じる' : '▼ 開く';
+
   const lbl = document.getElementById('kakeiboMonthLabel');
   if (lbl) lbl.textContent = `${currentYear}年${currentMonth}月`;
 
@@ -2282,13 +2138,12 @@ function renderKakeibo() {
   const daysPassed  = (currentYear === today.getFullYear() && currentMonth === today.getMonth()+1)
                       ? today.getDate() : daysInMonth;
 
-  const totalBudget   = getEffectiveTotalBudget();
-  const dailyBudget   = totalBudget / daysInMonth;
-  const totalSpent    = expenses.reduce((s,e) => s+e.amount, 0);
-  const budgetUsedSoFar = dailyBudget * daysPassed;
-  const paceKaihi     = budgetUsedSoFar - totalSpent;
-  const projectedEnd  = daysInMonth > 0 ? (totalSpent / Math.max(daysPassed,1)) * daysInMonth : 0;
-  const projKaihi     = totalBudget - projectedEnd;
+  const totalBudget  = getEffectiveTotalBudget();
+  const dailyBudget  = totalBudget / daysInMonth;
+  const totalSpent   = expenses.reduce((s,e) => s+e.amount, 0);
+  const paceKaihi    = (dailyBudget * daysPassed) - totalSpent;
+  const projectedEnd = daysInMonth > 0 ? (totalSpent / Math.max(daysPassed,1)) * daysInMonth : 0;
+  const projKaihi    = totalBudget - projectedEnd;
 
   // 乖離ボックス
   const kaihiBox = document.getElementById('kaihiBox');
@@ -2298,51 +2153,42 @@ function renderKakeibo() {
     } else {
       kaihiBox.style.display = '';
       kaihiBox.innerHTML = `
-      <div class="kaihi-item">
-        <span class="kaihi-label">月予算</span>
-        <span class="kaihi-value" style="color:var(--accent)">${totalBudget.toLocaleString()}円</span>
-      </div>
-      <div class="kaihi-item">
-        <span class="kaihi-label">1日予算</span>
-        <span class="kaihi-value">${Math.round(dailyBudget).toLocaleString()}円</span>
-      </div>
-      <div class="kaihi-item">
-        <span class="kaihi-label">今月の支出</span>
-        <span class="kaihi-value" style="color:var(--danger)">${totalSpent.toLocaleString()}円</span>
-      </div>
-      <div class="kaihi-item">
-        <span class="kaihi-label">ペース乖離</span>
-        <span class="kaihi-value" style="color:${paceKaihi>=0?'var(--success)':'var(--danger)'}">
-          ${paceKaihi>=0?'▼節約 ':'▲超過 '}${Math.abs(Math.round(paceKaihi)).toLocaleString()}円
-        </span>
-      </div>
-      <div class="kaihi-item">
-        <span class="kaihi-label">月末着地予測</span>
-        <span class="kaihi-value" style="color:${projKaihi>=0?'var(--success)':'var(--danger)'}">
-          ${Math.round(projectedEnd).toLocaleString()}円
-          <span style="font-size:13px;">(${projKaihi>=0?'▼':'▲'}${Math.abs(Math.round(projKaihi)).toLocaleString()}円)</span>
-        </span>
-      </div>
-      <div class="kaihi-item">
-        <span class="kaihi-label">残予算</span>
-        <span class="kaihi-value" style="color:${(totalBudget-totalSpent)>=0?'var(--success)':'var(--danger)'}">
-          ${(totalBudget-totalSpent).toLocaleString()}円
-        </span>
-      </div>
-    `;
+        <div class="kaihi-item"><span class="kaihi-label">月予算</span><span class="kaihi-value" style="color:var(--accent)">${totalBudget.toLocaleString()}円</span></div>
+        <div class="kaihi-item"><span class="kaihi-label">1日予算</span><span class="kaihi-value">${Math.round(dailyBudget).toLocaleString()}円</span></div>
+        <div class="kaihi-item"><span class="kaihi-label">今月の支出</span><span class="kaihi-value" style="color:var(--danger)">${totalSpent.toLocaleString()}円</span></div>
+        <div class="kaihi-item">
+          <span class="kaihi-label">ペース乖離</span>
+          <span class="kaihi-value" style="color:${paceKaihi>=0?'var(--success)':'var(--danger)'}">
+            ${paceKaihi>=0?'▼節約 ':'▲超過 '}${Math.abs(Math.round(paceKaihi)).toLocaleString()}円
+          </span>
+        </div>
+        <div class="kaihi-item">
+          <span class="kaihi-label">月末着地予測</span>
+          <span class="kaihi-value" style="color:${projKaihi>=0?'var(--success)':'var(--danger)'}">
+            ${Math.round(projectedEnd).toLocaleString()}円
+            <span style="font-size:13px;">(${projKaihi>=0?'▼':'▲'}${Math.abs(Math.round(projKaihi)).toLocaleString()}円)</span>
+          </span>
+        </div>
+        <div class="kaihi-item">
+          <span class="kaihi-label">残予算</span>
+          <span class="kaihi-value" style="color:${(totalBudget-totalSpent)>=0?'var(--success)':'var(--danger)'}">
+            ${(totalBudget-totalSpent).toLocaleString()}円
+          </span>
+        </div>
+      `;
     }
   }
 
-  // ペースバー（全体）
+  // ペースバー
   const paceSection = document.getElementById('paceSection');
   if (paceSection) {
     if (totalBudget === 0) {
       paceSection.style.display = 'none';
     } else {
       paceSection.style.display = '';
-      const spentPct  = Math.min(totalSpent / totalBudget * 100, 100);
-      const timePct   = Math.min(daysPassed / daysInMonth * 100, 100);
-      const barColor  = spentPct > timePct + 5 ? 'var(--danger)' : spentPct < timePct - 5 ? 'var(--success)' : 'var(--accent)';
+      const spentPct = Math.min(totalSpent / totalBudget * 100, 100);
+      const timePct  = Math.min(daysPassed / daysInMonth * 100, 100);
+      const barColor = spentPct > timePct + 5 ? 'var(--danger)' : spentPct < timePct - 5 ? 'var(--success)' : 'var(--accent)';
       paceSection.innerHTML = `
         <div style="margin-bottom:6px;font-size:13px;color:var(--text2);">全体ペース（${daysPassed}/${daysInMonth}日経過）</div>
         <div class="pace-bar-wrap">
@@ -2426,13 +2272,11 @@ function renderKakeibo() {
 
   // 日別支出表
   renderDailyTable(expenses, daysInMonth, dailyBudget, today);
-
-  // ゼロ円ボタン状態更新
   updateZeroDayBtn();
 }
 
 // ============================================================
-// Daily Table（縦：日付、横：支出ごとにセル追加、右端：小計・目標・差額）
+// Daily Table
 // ============================================================
 function renderDailyTable(expenses, daysInMonth, dailyBudget, today) {
   const wrap = document.getElementById('dailyTableWrap');
@@ -2443,7 +2287,6 @@ function renderDailyTable(expenses, daysInMonth, dailyBudget, today) {
   const DOW       = ['日','月','火','水','木','金','土'];
   const targetRound = Math.round(dailyBudget);
 
-  // 日別データ: dayMap[d] = [{name, amount, category}, ...]
   const dayMap = {};
   for (let d = 1; d <= daysInMonth; d++) dayMap[d] = [];
   expenses.forEach(e => {
@@ -2451,10 +2294,8 @@ function renderDailyTable(expenses, daysInMonth, dailyBudget, today) {
     if (dayMap[day]) dayMap[day].push(e);
   });
 
-  // 1日あたり最大何件か（列数確定）
   const maxItems = Math.max(1, ...Object.values(dayMap).map(a => a.length));
 
-  // ヘッダー：支出列はすべて空白（列数分）
   const blankHeaders = Array.from({length: maxItems}, (_, i) =>
     `<th class="th-expense">${i === 0 ? '支出' : ''}</th>`
   ).join('');
@@ -2483,14 +2324,12 @@ function renderDailyTable(expenses, daysInMonth, dailyBudget, today) {
     const isZero    = isZeroDay(dateStr);
 
     let dateClass = 'td-date';
-    if (isToday)   dateClass += ' today';
+    if (isToday) dateClass += ' today';
     else if (isWeekend) dateClass += ' weekend';
 
-    // 支出セル群（件数分 + 空セルで maxItems に揃える）
     const expCells = Array.from({length: maxItems}, (_, i) => {
       const e = items[i];
       if (!e) {
-        // 最初の空セルにゼロ円確定ボタンを表示（支出がない場合のみ）
         if (i === 0 && dayTotal === 0) {
           return `<td class="td-expense td-expense-empty" style="vertical-align:middle;text-align:center;">
             <button onclick="toggleZeroDay('${dateStr}')" style="
@@ -2515,7 +2354,6 @@ function renderDailyTable(expenses, daysInMonth, dailyBudget, today) {
       </td>`;
     }).join('');
 
-    // 小計・差額（ゼロ円確定日は緑でゼロ表示）
     const totalHTML = dayTotal > 0
       ? `<span class="summary-total">${dayTotal.toLocaleString()}</span>`
       : isZero ? `<span style="font-family:var(--mono);font-size:12px;color:var(--success);">0</span>` : '';
@@ -2533,7 +2371,6 @@ function renderDailyTable(expenses, daysInMonth, dailyBudget, today) {
     </tr>`;
   }
 
-  // フッター合計行
   const grandActual = expenses.reduce((s,e) => s+e.amount, 0);
   const grandTarget = targetRound * daysInMonth;
   const grandDiff   = grandTarget - grandActual;
@@ -2569,7 +2406,6 @@ function closeModalDirect() {
   document.getElementById('editModal').classList.remove('open');
 }
 
-// ---- 予測トランザクション編集 ----
 function editForecastTx(type, idx) {
   const key  = getMonthKey();
   const item = monthData[key][type][idx];
@@ -2591,7 +2427,6 @@ function editForecastTx(type, idx) {
   });
 }
 
-// ---- 実績トランザクション編集 ----
 function editActualTx(type, idx) {
   const key  = getMonthKey();
   const item = actualData[key][type][idx];
@@ -2613,7 +2448,6 @@ function editActualTx(type, idx) {
   });
 }
 
-// ---- 家計簿支出編集 ----
 function editExpense(idx) {
   const key  = getMonthKey();
   const item = expenseData[key][idx];
@@ -2636,28 +2470,20 @@ function editExpense(idx) {
 }
 
 // ============================================================
+// Export / Import
+// ============================================================
 function exportData() {
   const payload = {
     version: 1,
     exportedAt: new Date().toISOString(),
-    accounts,
-    monthData,
-    actualData,
-    budgetCategories,
-    expenseData,
-    monthTotalBudget,
-    budgetMode,
-    zeroDays,
-    monthBalances,
-    monthCatBudget,
+    accounts, monthData, actualData, budgetCategories, expenseData,
+    monthTotalBudget, budgetMode, zeroDays, monthBalances, monthCatBudget,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   const date = new Date().toISOString().split('T')[0];
-  a.href     = url;
-  a.download = `kaikei-backup-${date}.json`;
-  a.click();
+  a.href = url; a.download = `kaikei-backup-${date}.json`; a.click();
   URL.revokeObjectURL(url);
   const st = document.getElementById('exportStatus');
   if (st) { st.textContent = `✓ エクスポート完了（${date}）`; setTimeout(() => st.textContent = '', 4000); }
@@ -2674,29 +2500,22 @@ function importData(input) {
       if (!data.version || !data.accounts) throw new Error('フォーマットが正しくありません');
       if (!confirm('現在のデータをすべて上書きしてインポートしますか？')) { input.value = ''; return; }
 
-      accounts          = data.accounts          || [];
-      monthData         = data.monthData          || {};
-      actualData        = data.actualData         || {};
-      budgetCategories  = data.budgetCategories   || [];
-      expenseData       = data.expenseData        || {};
-      monthTotalBudget  = data.monthTotalBudget   || {};
-      budgetMode        = data.budgetMode         || 'category';
-      zeroDays          = data.zeroDays           || {};
-      monthBalances     = data.monthBalances      || {};
-      monthCatBudget    = data.monthCatBudget     || {};
+      accounts         = data.accounts         || [];
+      monthData        = data.monthData         || {};
+      actualData       = data.actualData        || {};
+      budgetCategories = data.budgetCategories  || [];
+      expenseData      = data.expenseData       || {};
+      monthTotalBudget = data.monthTotalBudget  || {};
+      budgetMode       = data.budgetMode        || 'category';
+      zeroDays         = data.zeroDays          || {};
+      monthBalances    = data.monthBalances     || {};
+      monthCatBudget   = data.monthCatBudget    || {};
 
-      // 保存
-      saveData();
-      saveBudgetData();
+      saveData(); saveBudgetData();
       localStorage.setItem('accounts', JSON.stringify(accounts));
 
-      // 再描画
-      renderAccountSettings();
-      updateAccountSelects();
-      updateExpCategorySelect();
-      renderDashboard();
-      renderForecastList();
-      renderActualList();
+      renderAccountSettings(); updateAccountSelects(); updateExpCategorySelect();
+      renderDashboard(); renderForecastList(); renderActualList();
 
       if (st) { st.style.color = 'var(--success)'; st.textContent = `✓ インポート完了！（${data.exportedAt?.split('T')[0] || ''}）`; }
     } catch(err) {
